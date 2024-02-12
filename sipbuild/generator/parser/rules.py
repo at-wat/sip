@@ -3,6 +3,7 @@
 # Copyright (c) 2024 Phil Thompson <phil@riverbankcomputing.com>
 
 
+from ..event_types import EventType
 from ..scoped_name import ScopedName
 from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, ClassKey, Docstring, DocstringFormat, Extract,
@@ -914,9 +915,17 @@ def p_mapped_type_head(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 3, "mapped type", _MAPPED_TYPE_ANNOTATIONS)
+    mapped_type = MappedType()
 
-    pm.add_mapped_type(p, 1, p[2], p[3])
+    annotations = p[3]
+    pm.bindings.event_trigger(EventType.PARSE_MAPPED_TYPE_ANNOTATIONS,
+            mapped_type, annotations)
+    pm.check_annotations(p, 3, annotations, _MAPPED_TYPE_ANNOTATIONS,
+            "mapped type")
+
+    pm.add_mapped_type(p, 1, mapped_type, p[2], annotations)
+
+    pm.annotate_mapped_type(p, 3, mapped_type, annotations)
 
 
 def p_mapped_type_template_head(p):
@@ -932,7 +941,6 @@ def p_mapped_type_template_head(p):
         return
 
     pm.cpp_only(p, 1, "%MappedType templates")
-    pm.check_annotations(p, 4, "mapped type", _MAPPED_TYPE_ANNOTATIONS)
 
     if p[3].type is not ArgumentType.TEMPLATE:
         pm.parser_error(p, 3, "%MappedType template must map a template type")
@@ -943,9 +951,19 @@ def p_mapped_type_template_head(p):
             pm.parser_error(p, 1,
                     "a %MappedType template for this type has already been defined")
 
+    mapped_type = MappedType()
+
+    annotations = p[4]
+    pm.bindings.event_trigger(EventType.PARSE_MAPPED_TYPE_ANNOTATIONS,
+            mapped_type, annotations)
+    pm.check_annotations(p, 4, annotations, _MAPPED_TYPE_ANNOTATIONS,
+            "mapped type")
+
     # Use a dummy interface file.
-    mapped_type = MappedType(IfaceFile(IfaceFileType.MAPPED_TYPE), p[3])
-    pm.annotate_mapped_type(p, 4, mapped_type, p[4])
+    mapped_type.iface_file = IfaceFile(IfaceFileType.MAPPED_TYPE)
+    mapped_type.type = p[3]
+
+    pm.annotate_mapped_type(p, 4, mapped_type, annotations)
 
     mtt = MappedTypeTemplate(mapped_type, p[1])
     pm.spec.mapped_type_templates.insert(0, mtt)
@@ -979,10 +997,11 @@ def p_mapped_type_function(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 9, "function", _FUNCTION_ANNOTATIONS)
-    pm.apply_type_annotations(p, 9, p[2], p[9])
+    annotations = p[9]
+    pm.check_annotations(p, 9, annotations, _FUNCTION_ANNOTATIONS, "function")
+    pm.apply_type_annotations(p, 9, p[2], annotations)
 
-    overload = pm.add_function(p, 1, p[3], p[2], p[5], p[9], const=p[7],
+    overload = pm.add_function(p, 1, p[3], p[2], p[5], annotations, const=p[7],
             exceptions=p[8], cpp_signature=p[10], docstring=p[12],
             premethod_code=p[13], method_code=p[14])
 
@@ -1188,7 +1207,7 @@ def p_platforms(p):
     selected = []
 
     for qual_name in p[3]:
-        if qual_name in pm.tags:
+        if qual_name in pm.bindings.tags:
             selected.append(qual_name)
 
         pm.add_qualifier(p, 1, qual_name, QualifierType.PLATFORM)
@@ -1361,7 +1380,7 @@ def p_timeline(p):
     selected = []
 
     for order, qual_name in enumerate(p[3]):
-        if qual_name in pm.tags:
+        if qual_name in pm.bindings.tags:
             selected.append(qual_name)
 
         pm.add_qualifier(p, 1, qual_name, QualifierType.TIME, order=order,
@@ -1771,12 +1790,13 @@ def p_class_head(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 3, "class", _CLASS_ANNOTATIONS)
+    annotations = p[3]
+    pm.check_annotations(p, 3, annotations, _CLASS_ANNOTATIONS, "class")
 
     if p[2] is not None:
         pm.cpp_only(p, 2, "super-classes")
 
-    pm.define_class(p, 1, ClassKey.CLASS, p[1], p[3], superclasses=p[2])
+    pm.define_class(p, 1, ClassKey.CLASS, p[1], annotations, superclasses=p[2])
 
     # Return the annotations.
     p[0] = p[3]
@@ -1801,9 +1821,11 @@ def p_struct_head(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 3, "class", _CLASS_ANNOTATIONS)
+    annotations = p[3]
+    pm.check_annotations(p, 3, annotations, _CLASS_ANNOTATIONS, "class")
 
-    pm.define_class(p, 1, ClassKey.STRUCT, p[1], p[3], superclasses=p[2])
+    pm.define_class(p, 1, ClassKey.STRUCT, p[1], annotations,
+            superclasses=p[2])
 
     # Return the annotations.
     p[0] = p[3]
@@ -1984,9 +2006,10 @@ def p_ctor_decl(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 6, "constructor", _CTOR_ANNOTATIONS)
+    annotations = p[6]
+    pm.check_annotations(p, 6, annotations, _CTOR_ANNOTATIONS, "constructor")
 
-    pm.add_ctor(p, 1, p[3], p[6], exceptions=p[5], cpp_signature=p[7],
+    pm.add_ctor(p, 1, p[3], annotations, exceptions=p[5], cpp_signature=p[7],
             docstring=p[9], premethod_code=p[10], method_code=p[11])
 
 
@@ -2015,9 +2038,10 @@ def p_dtor(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 8, "destructor", _DTOR_ANNOTATIONS)
+    annotations = p[8]
+    pm.check_annotations(p, 8, annotations, _DTOR_ANNOTATIONS, "destructor")
 
-    pm.add_dtor(p, 1, p[3], p[8], exceptions=p[6], abstract=p[7],
+    pm.add_dtor(p, 1, p[3], annotations, exceptions=p[6], abstract=p[7],
             premethod_code=p[10], method_code=p[11],
             virtual_catcher_code=p[12])
 
@@ -2155,9 +2179,10 @@ def p_enum_decl(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 4, "enum", _ENUM_ANNOTATIONS)
+    annotations = p[4]
+    pm.check_annotations(p, 4, annotations, _ENUM_ANNOTATIONS, "enum")
 
-    pm.add_enum(p, 1, p[3], p[2], p[4], p[6])
+    pm.add_enum(p, 1, p[3], p[2], annotations, p[6])
 
 
 def p_opt_enum_key(p):
@@ -2204,7 +2229,9 @@ def p_enum_line(p):
         return
 
     if len(p) == 5:
-        pm.check_annotations(p, 3, "enum member", _ENUM_MEMBER_ANNOTATIONS)
+        annotations = p[3]
+        pm.check_annotations(p, 3, annotations, _ENUM_MEMBER_ANNOTATIONS,
+                "enum member")
 
         p[0] = (p[1], cached_name(pm.spec, pm.get_py_name(p[1], p[3])),
                 p[3].get('NoTypeHint', False))
@@ -2240,10 +2267,12 @@ def p_exception(p):
         return
 
     pm.cpp_only(p, 1, "%Exception")
-    pm.check_annotations(p, 4, "exception", _EXCEPTION_ANNOTATIONS)
+    annotations = p[4]
+    pm.check_annotations(p, 4, annotations, _EXCEPTION_ANNOTATIONS,
+            "exception")
 
     cpp_name = p[2]
-    py_name = pm.get_py_name(cpp_name.base_name, p[4])
+    py_name = pm.get_py_name(cpp_name.base_name, annotations)
     pm.check_attributes(p, 2, py_name)
 
     builtin_base, defined_base = p[3]
@@ -2384,10 +2413,11 @@ def p_function_decl(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 10, "function", _FUNCTION_ANNOTATIONS)
-    pm.apply_type_annotations(p, 10, p[1], p[10])
+    annotations = p[10]
+    pm.check_annotations(p, 10, annotations, _FUNCTION_ANNOTATIONS, "function")
+    pm.apply_type_annotations(p, 10, p[1], annotations)
 
-    p[0] = pm.add_function(p, 1, p[2], p[1], p[4], p[10], const=p[6],
+    p[0] = pm.add_function(p, 1, p[2], p[1], p[4], annotations, const=p[6],
             final=p[7], exceptions=p[8], abstract=p[9], cpp_signature=p[11],
             docstring=p[13], premethod_code=p[14], method_code=p[15],
             virtual_catcher_code=p[16], virtual_call_code=p[17])
@@ -2416,8 +2446,9 @@ def p_operator_decl(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 11, "function", _FUNCTION_ANNOTATIONS)
-    pm.apply_type_annotations(p, 11, p[1], p[11])
+    annotations = p[11]
+    pm.check_annotations(p, 11, annotations, _FUNCTION_ANNOTATIONS, "function")
+    pm.apply_type_annotations(p, 11, p[1], annotations)
 
     scope = pm.scope
 
@@ -2468,8 +2499,9 @@ def p_operator_cast_decl(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 10, "function", _FUNCTION_ANNOTATIONS)
-    pm.apply_type_annotations(p, 10, p[2], p[10])
+    annotations = p[10]
+    pm.check_annotations(p, 10, annotations, _FUNCTION_ANNOTATIONS, "function")
+    pm.apply_type_annotations(p, 10, p[2], annotations)
 
     if pm.scope is None:
         pm.parser_error(p, 1,
@@ -2499,8 +2531,8 @@ def p_operator_cast_decl(p):
         else:
             pm.scope.casts.insert(0, cpp_type)
     else:
-        p[0] = pm.add_function(p, 1, slot_name, p[2], p[4], p[10], const=p[6],
-                final=p[7], exceptions=p[8], abstract=p[9],
+        p[0] = pm.add_function(p, 1, slot_name, p[2], p[4], annotations,
+                const=p[6], final=p[7], exceptions=p[8], abstract=p[9],
                 cpp_signature=p[11], premethod_code=p[13], method_code=p[14],
                 virtual_catcher_code=p[15], virtual_call_code=p[16])
 
@@ -2575,10 +2607,12 @@ def p_arg_type(p):
 
     pm = p.parser.pm
 
-    pm.check_annotations(p, 3, "argument", _ARGUMENT_ANNOTATIONS)
-
     arg = p[1]
     annotations = p[3]
+
+    #pm.bindings.event_trigger(EventType.PARSE_ARGUMENT_ANNOTATIONS, arg,
+    #        annotations)
+    pm.check_annotations(p, 3, annotations, _ARGUMENT_ANNOTATIONS, "argument")
 
     if p[2] is not None:
         arg.name = cached_name(pm.spec, p[2])
@@ -2958,12 +2992,14 @@ def p_namespace_head(p):
         return
 
     pm.cpp_only(p, 1, "namespaces")
-    pm.check_annotations(p, 2, "namespace", _NAMESPACE_ANNOTATIONS)
+    annotations = p[2]
+    pm.check_annotations(p, 2, annotations, _NAMESPACE_ANNOTATIONS,
+            "namespace")
 
     namespace = pm.new_class(p, 1, IfaceFileType.NAMESPACE,
             normalised_scoped_name(p[1], pm.scope))
 
-    namespace.pyqt_no_qmetaobject = p[2].get('PyQtNoQMetaObject', False)
+    namespace.pyqt_no_qmetaobject = annotations.get('PyQtNoQMetaObject', False)
 
     pm.push_scope(namespace)
 
@@ -3016,7 +3052,8 @@ def p_typedef_decl(p):
     fq_cpp_name = normalised_scoped_name(ScopedName(cpp_name), pm.scope)
     annotations = p[annos_symbol]
 
-    pm.check_annotations(p, annos_symbol, "typedef", _TYPEDEF_ANNOTATIONS)
+    pm.check_annotations(p, annos_symbol, annotations, _TYPEDEF_ANNOTATIONS,
+            "typedef")
     pm.apply_type_annotations(p, annos_symbol, type, annotations)
 
     no_type_name = annotations.get('NoTypeName', False)
@@ -3091,13 +3128,13 @@ def p_union_head(p):
     if pm.skipping:
         return
 
-    pm.check_annotations(p, 2, "union", _UNION_ANNOTATIONS)
+    annotations = p[2]
+    pm.check_annotations(p, 2, annotations, _UNION_ANNOTATIONS, "union")
 
-    pm.define_class(p, 1, ClassKey.UNION, p[1], p[2])
+    pm.define_class(p, 1, ClassKey.UNION, p[1], annotations)
 
     # Return the annotations.
-    p[0] = p[2]
-
+    p[0] = annotations
 
 
 # C/C++ variables. ############################################################
@@ -3137,7 +3174,8 @@ def p_variable(p):
 
     annotations = p[annos_symbol]
 
-    pm.check_annotations(p, annos_symbol, "variable", _VARIABLE_ANNOTATIONS)
+    pm.check_annotations(p, annos_symbol, annotations, _VARIABLE_ANNOTATIONS,
+            "variable")
     pm.apply_type_annotations(p, annos_symbol, type, annotations)
 
     py_name = cached_name(pm.spec, pm.get_py_name(cpp_name, p[3]))

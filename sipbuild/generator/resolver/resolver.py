@@ -1819,7 +1819,7 @@ def _instantiate_mapped_type_template(spec, mod, mapped_type_template, type,
             error_log.log, cpp_type=type)
     iface_file.module = mod
 
-    mapped_type = MappedType(iface_file, copy(type))
+    mapped_type = MappedType(iface_file=iface_file, type=copy(type))
     mapped_type.type.derefs = []
     mapped_type.type.is_const = False
     mapped_type.type.is_reference = False

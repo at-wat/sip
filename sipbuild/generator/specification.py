@@ -562,6 +562,18 @@ class ValueType(Enum):
 
 
 @dataclass
+class Extendable:
+    """ A mixin for specification objects that can be extended by build system
+    extension packages.
+    """
+
+    # A dict of extension objects.  Each build system extension package
+    # potentially has an entry (keyed by a string specific to the package) of a
+    # package-specific object.
+    extension_data: Optional[Dict[str, Any]] = None
+
+
+@dataclass
 class Argument:
     """ Encapsulate a callable argument (or return value or variable type). """
 
@@ -820,14 +832,8 @@ class License:
 
 
 @dataclass
-class MappedType:
+class MappedType(Extendable):
     """ Encapsulate a mapped type. """
-
-    # The interface file.
-    iface_file: IfaceFile
-
-    # The type.
-    type: Argument
 
     # The %ConvertFromTypeCode.
     convert_from_type_code: Optional[CodeBlock] = None
@@ -840,6 +846,9 @@ class MappedType:
 
     # Set if /AllowNone/ was specified.
     handles_none: bool = False
+
+    # The interface file.
+    iface_file: Optional[IfaceFile] = None
 
     # The %InstanceCode.
     instance_code: Optional[CodeBlock] = None
@@ -873,6 +882,9 @@ class MappedType:
 
     # The %ReleaseCode.
     release_code: Optional[CodeBlock] = None
+
+    # The type.
+    type: Optional[Argument] = None
 
     # The %TypeCode.
     type_code: List[CodeBlock] = field(default_factory=list)

@@ -35,9 +35,8 @@ class ParserManager:
     with state and utility functions.
     """
 
-    def __init__(self, hex_version, encoding, abi_version, tags,
-            disabled_features, protected_is_public, include_dirs, sip_module,
-            is_strict):
+    def __init__(self, bindings, hex_version, encoding, abi_version,
+            include_dirs, sip_module, is_strict):
         """ Initialise the manager. """
 
         # Create the lexer.
@@ -56,7 +55,7 @@ class ParserManager:
         self.class_templates = []
 
         # Public state.
-        self.tags = tags
+        self.bindings = bindings
 
         self.spec = Specification(
                 tuple([int(v) for v in abi_version.split('.')]), is_strict,
@@ -77,8 +76,6 @@ class ParserManager:
         # Private state.
         self._hex_version = hex_version
         self._encoding = encoding
-        self._disabled_features = disabled_features
-        self._protected_is_public = protected_is_public
         self._include_dirs = include_dirs
         self._template_arg_classes = []
 
@@ -353,7 +350,7 @@ class ParserManager:
         scope = self.scope
 
         if scope is not None:
-            if self.scope_access_specifier is AccessSpecifier.PROTECTED and not self._protected_is_public:
+            if self.scope_access_specifier is AccessSpecifier.PROTECTED and not self.bindings.protected_is_public:
                 scope.is_protected = True
 
                 if iface_file_type is IfaceFileType.CLASS:
@@ -455,7 +452,7 @@ class ParserManager:
         # Handle the access specifier.
         access_specifier = self.scope_access_specifier
 
-        if access_specifier is AccessSpecifier.PROTECTED and self._protected_is_public:
+        if access_specifier is AccessSpecifier.PROTECTED and self.bindings.protected_is_public:
             access_specifier = AccessSpecifier.PUBLIC
 
         # Handle the signatures allowing it to be used like a function
@@ -621,7 +618,7 @@ class ParserManager:
                 py_name=py_name, scope=self.scope)
 
         if self.scope_access_specifier is AccessSpecifier.PROTECTED:
-            if not self._protected_is_public:
+            if not self.bindings.protected_is_public:
                 w_enum.is_protected = True
                 self.scope.needs_shadow = True
 
@@ -679,7 +676,7 @@ class ParserManager:
 
         overload.pyqt_method_specifier = self.scope_pyqt_method_specifier
 
-        if overload.access_specifier is AccessSpecifier.PROTECTED and self._protected_is_public:
+        if overload.access_specifier is AccessSpecifier.PROTECTED and self.bindings.protected_is_public:
             overload.access_specifier = AccessSpecifier.PUBLIC
             overload.access_is_really_protected = True
 
@@ -816,8 +813,10 @@ class ParserManager:
 
         return overload
 
-    def add_mapped_type(self, p, symbol, cpp_type, annotations):
-        """ Create a new mapped type and add it to the current scope. """
+    def add_mapped_type(self, p, symbol, mapped_type, cpp_type, annotations):
+        """ Complete the implementation of a mapped type and add it to the
+        current scope.
+        """
 
         # Check the type is one we want to map.
         if cpp_type.type is ArgumentType.DEFINED:
@@ -852,8 +851,9 @@ class ParserManager:
         # The module may not have been set yet.
         iface_file.module = self.module_state.module
 
-        # Create a new mapped type.
-        mapped_type = MappedType(iface_file, cpp_type)
+        # Complete the implementation.
+        mapped_type.iface_file = iface_file
+        mapped_type.type = cpp_type
 
         mapped_type.cpp_name = cached_name(self.spec,
                 argument_as_str(cpp_type))
@@ -862,7 +862,6 @@ class ParserManager:
             mapped_type.py_name = cached_name(self.spec,
                     annotations.get('PyName', cpp_name))
 
-        self.annotate_mapped_type(p, symbol, mapped_type, annotations)
         self.spec.mapped_types.insert(0, mapped_type)
 
         if self.in_main_module:
@@ -987,13 +986,14 @@ class ParserManager:
             else:
                 type.type = self.convert_encoding(p, symbol, encoding)
 
-    def check_annotations(self, p, symbol, context, annotations):
+    def check_annotations(self, p, symbol, annotations, valid_annotations,
+            context):
         """ Check that all the annotations provided as a dict of name/values
         are valid in a given context.
         """
 
-        for name in p[symbol]:
-            if name not in annotations:
+        for name in annotations:
+            if name not in valid_annotations:
                 self.parser_error(p, symbol,
                         "{0} is not a valid {1} annotation".format(name,
                                 context))
@@ -1213,13 +1213,13 @@ class ParserManager:
             return False
 
         if qual.type is QualifierType.FEATURE:
-            value = qual.name not in self._disabled_features
+            value = qual.name not in self.bindings.disabled_features
         elif qual.type is QualifierType.PLATFORM:
             # The platform is always ignored in non-strict mode.
             if not self.spec.is_strict:
                 return True
 
-            value = qual.name in self.tags
+            value = qual.name in self.bindings.tags
         else:
             self.parser_error(p, symbol,
                     "'{0}' is a %Timeline qualifier which can only be used in a range".format(name))
@@ -1291,7 +1291,7 @@ class ParserManager:
 
         # See if there is a selected qualifier withing range.
         for qual in module.qualifiers:
-            if qual.type is QualifierType.TIME and qual.timeline == timeline and qual.name in self.tags:
+            if qual.type is QualifierType.TIME and qual.timeline == timeline and qual.name in self.bindings.tags:
                 if lower_qual is not None and qual.order < lower_qual.order:
                     return False
                 if upper_qual is not None and qual.order >= upper_qual.order:
@@ -2092,12 +2092,12 @@ class ParserManager:
                 self.spec.abi_version[0], sip_file, self._include_dirs)
 
         for tag in mod_tags:
-            if tag not in self.tags:
-                self.tags.append(tag)
+            if tag not in self.bindings.tags:
+                self.bindings.tags.append(tag)
 
         for feature in mod_disabled:
-            if feature not in self._disabled_features:
-                self._disabled_features.append(feature)
+            if feature not in self.bindings.disabled_features:
+                self.bindings.disabled_features.append(feature)
 
         # Add the new import.
         importing_from.imports.append(module)

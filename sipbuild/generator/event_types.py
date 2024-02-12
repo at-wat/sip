@@ -9,6 +9,17 @@ from enum import auto, Enum
 class EventType(Enum):
     """ The event types. """
 
+    # Append a code fragment that implements a mapped type plugin data
+    # structure.  The extendable specification object is a mapped type.  The
+    # handler argument is a 2-tuple of the list to append the code to and the
+    # name to use for the data structure.
+    APPEND_MAPPED_TYPE_PLUGIN_CODE = auto()
+
+    # Append code fragments to be included in all generated sipAPI*.h files.
+    # There is no extendable specification object.  The handler argument is the
+    # list to append the code.
+    APPEND_SIP_API_H_CODE = auto()
+
     # Parse argument annotations.  The extendable specification object is an
     # argument.  The handler argument is a dict of annotations.  Any
     # annotations dealt with by the handler should be removed from the dict.

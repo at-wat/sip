@@ -2047,6 +2047,7 @@ class ParserManager:
     def _get_plugin_annotation(self, p, symbol, annotations, name, plugin):
         """ Return an annotation that is only supported by a plugin. """
 
+        # TODO: remove in SIP v7.
         anno = annotations.get(name)
 
         if anno is not None and plugin not in self.spec.plugins:

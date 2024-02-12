@@ -8,6 +8,7 @@ import os
 from ...exceptions import UserException
 from ...version import SIP_VERSION_STR
 
+from ..event_types import EventType
 from ..python_slots import (is_hash_return_slot, is_inplace_number_slot,
         is_inplace_sequence_slot, is_int_arg_slot, is_int_return_slot,
         is_multi_arg_slot, is_number_slot, is_rich_compare_slot,
@@ -336,6 +337,13 @@ extern sipExportedModuleDef sipModuleAPI_{module_name};
 
         if imported_module.nr_exceptions != 0:
             sf.write(f'extern sipImportedExceptionDef sipImportedExceptions_{module_name}_{imported_module_name}[];\n')
+
+    # Add code from any build system extensions.
+    sip_api_h_code = []
+    bindings.event_trigger(EventType.APPEND_SIP_API_H_CODE, None,
+            sip_api_h_code)
+    if sip_api_h_code:
+        sf.write('\n' + '\n'.join(sip_api_h_code))
 
     if _pyqt5(spec) or _pyqt6(spec):
         sf.write(
@@ -2265,10 +2273,23 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
     if cod_nrmethods > 0:
         needs_namespace = True
 
-    if _pyqt6(spec) and mapped_type.pyqt_flags != 0:
+    td_plugins = []
+    td_plugin_name = 'plugin_' + mapped_type_name
+    bindings.event_trigger(EventType.APPEND_MAPPED_TYPE_PLUGIN_CODE,
+            mapped_type, td_plugins, td_plugin_name)
+
+    if td_plugins:
+        if len(td_plugins) != 1:
+            raise UserException(
+                    "more than one build system package has provided a mapped type plugin")
+
+        sf.write('\n\n' + td_plugins[0])
+
+        td_plugin_data = '&' + td_plugin_name
+    elif _pyqt6(spec) and mapped_type.pyqt_flags != 0:
         sf.write(f'\n\nstatic pyqt6MappedTypePluginDef plugin_{mapped_type_name} = {{{mapped_type.pyqt_flags}}};\n')
 
-        td_plugin_data = '&plugin_' + mapped_type_name
+        td_plugin_data = '&' + td_plugin_name
     else:
         td_plugin_data = 'SIP_NULLPTR'
 

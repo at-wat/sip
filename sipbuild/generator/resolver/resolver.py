@@ -1830,13 +1830,13 @@ def _instantiate_mapped_type_template(spec, mod, mapped_type_template, type,
 
     proto_mapped_type = mapped_type_template.mapped_type
 
+    mapped_type.extension_data = proto_mapped_type.extension_data
     mapped_type.handles_none = proto_mapped_type.handles_none
     mapped_type.needs_user_state = proto_mapped_type.needs_user_state
     mapped_type.no_assignment_operator = proto_mapped_type.no_assignment_operator
     mapped_type.no_copy_ctor = proto_mapped_type.no_copy_ctor
     mapped_type.no_default_ctor = proto_mapped_type.no_default_ctor
     mapped_type.no_release = proto_mapped_type.no_release
-    mapped_type.pyqt_flags = proto_mapped_type.pyqt_flags
 
     if proto_mapped_type.type_hints is not None:
         mapped_type.type_hints = instantiate_type_hints(spec,

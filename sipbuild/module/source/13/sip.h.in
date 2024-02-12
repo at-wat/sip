@@ -1553,7 +1553,7 @@ const sipAPIDef *sip_init_library(PyObject *mod_dict);
 
 
 /*
- * The following are PyQt-specific extensions.  These may be removed in SIP v7.
+ * The following are PyQt-specific extensions.  They will be removed in SIP v7.
  * Note that, at the moment, the PyQt5 and PyQt6 extensions are identical.
  */
 

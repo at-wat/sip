@@ -319,6 +319,7 @@ class KwArgs(Enum):
     OPTIONAL = auto()
 
 
+# TODO
 class PyQtMethodSpecifier(Enum):
     """ The PyQt-specific method specifier. """
 
@@ -877,7 +878,7 @@ class MappedType(Extendable):
     # The Python name.  It will be None for mapped type templates.
     py_name: Optional[CachedName] = None
 
-    # The /PyQtFlags/.
+    # The /PyQtFlags/.  Remove in SIP v7.
     pyqt_flags: int = 0
 
     # The %ReleaseCode.
@@ -1156,6 +1157,7 @@ class Overload:
     premethod_code: Optional[CodeBlock] = None
 
     # The PyQt method specifier.
+    # TODO
     pyqt_method_specifier: Optional[PyQtMethodSpecifier] = None
 
     # Set if a Python exception is raised.
@@ -1307,6 +1309,7 @@ class Specification:
     plugins: List[str] = field(default_factory=list)
 
     # The QObject class.
+    # TODO
     pyqt_qobject: Optional['WrappedClass'] = None
 
     # The list of typedefs.
@@ -1614,15 +1617,19 @@ class WrappedClass:
     properties: List[Property] = field(default_factory=list)
 
     # The /PyQtFlags/.
+    # TODO
     pyqt_flags: int = 0
 
     # The /PyQtFlagsEnums/.
+    # TODO
     pyqt_flags_enums: Optional[List[str]] = None
 
     # The /PyQtInterface/.
+    # TODO
     pyqt_interface: Optional[str] = None
 
     # Set if /PyQtNoQMetaObject/ was specified.
+    # TODO
     pyqt_no_qmetaobject: bool = False
 
     # The real class if this is a proxy or a namespace extender.

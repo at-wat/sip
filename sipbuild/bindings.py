@@ -143,9 +143,12 @@ class Bindings(Configurable):
         # empty as there will be many extandable objects but only a small
         # number will have extension data.
 
-        extension_data = extendable_object.extension_data
-        if extension_data is None:
-            extension_data = {}
+        if extendable_object is not None:
+            extension_data = extendable_object.extension_data
+            if extension_data is None:
+                extension_data = {}
+        else:
+            extension_data = None
 
         # Pass a single argument as-is.
         if len(args) == 1:
@@ -153,10 +156,11 @@ class Bindings(Configurable):
 
         self.event_handler(event_type, extension_data, args)
 
-        if not extension_data:
-            extension_data = None
+        if extendable_object is not None:
+            if not extension_data:
+                extension_data = None
 
-        extendable_object.extension_data = extension_data
+            extendable_object.extension_data = extension_data
 
     def generate(self):
         """ Generate the bindings source code and optional additional extracts.

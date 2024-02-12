@@ -1820,8 +1820,7 @@ typedef struct _sipQtAPI {
 
 
 /*
- * The following are PyQt4-specific extensions.  In SIP v5 they will be pushed
- * out to a plugin supplied by PyQt4.
+ * The following are PyQt-specific extensions.  They will be removed in SIP v7.
  */
 
 /*

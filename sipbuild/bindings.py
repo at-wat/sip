@@ -129,39 +129,6 @@ class Bindings(Configurable):
 
         super().apply_user_defaults(tool)
 
-    def event_handler(self, event_type, extension_data, args):
-        """ Handle an event related to an extendable specification object. """
-
-        # This default implemetation does nothing.
-        pass
-
-    def event_trigger(self, event_type, extendable_object, *args):
-        """ Trigger an event related to an extendable specification object. """
-
-        # The extension data is a dict with an entry for each build system
-        # extension package.  We take care to keep the dict only if it isn't
-        # empty as there will be many extandable objects but only a small
-        # number will have extension data.
-
-        if extendable_object is not None:
-            extension_data = extendable_object.extension_data
-            if extension_data is None:
-                extension_data = {}
-        else:
-            extension_data = None
-
-        # Pass a single argument as-is.
-        if len(args) == 1:
-            args = args[0]
-
-        self.event_handler(event_type, extension_data, args)
-
-        if extendable_object is not None:
-            if not extension_data:
-                extension_data = None
-
-            extendable_object.extension_data = extension_data
-
     def generate(self):
         """ Generate the bindings source code and optional additional extracts.
         and return a BuildableBindings instance containing the details of

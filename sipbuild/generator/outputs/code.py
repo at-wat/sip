@@ -8,7 +8,6 @@ import os
 from ...exceptions import UserException
 from ...version import SIP_VERSION_STR
 
-from ..event_types import EventType
 from ..python_slots import (is_hash_return_slot, is_inplace_number_slot,
         is_inplace_sequence_slot, is_int_arg_slot, is_int_return_slot,
         is_multi_arg_slot, is_number_slot, is_rich_compare_slot,
@@ -43,7 +42,7 @@ def output_code(spec, bindings, project, buildable):
         _module_code(spec, bindings, project, py_debug, buildable)
 
 
-def _internal_api_header(sf, spec, bindings, py_debug, name_cache_list):
+def _internal_api_header(sf, spec, bindings, project, name_cache_list):
     """ Generate the C++ internal module API header file and return its path
     name.
     """
@@ -57,9 +56,10 @@ f'''#ifndef _{module_name}API_H
 #define _{module_name}API_H
 ''')
 
-    _declare_limited_api(sf, py_debug, module=module)
+    _declare_limited_api(sf, project.py_debug, module=module)
     _include_sip_h(sf, module)
 
+    # XXX
     if _pyqt5(spec) or _pyqt6(spec):
         sf.write(
 '''
@@ -340,11 +340,12 @@ extern sipExportedModuleDef sipModuleAPI_{module_name};
 
     # Add code from any build system extensions.
     sip_api_h_code = []
-    bindings.event_trigger(EventType.APPEND_SIP_API_H_CODE, None,
+    project.call_build_system_extensions('append_sip_api_h_code',
             sip_api_h_code)
     if sip_api_h_code:
         sf.write('\n' + '\n'.join(sip_api_h_code))
 
+    # XXX
     if _pyqt5(spec) or _pyqt6(spec):
         sf.write(
 f'''
@@ -1087,6 +1088,7 @@ f'''
 const sipAPIDef *sipAPI_{module_name};
 ''')
 
+    # XXX
     if _pyqt5(spec) or _pyqt6(spec):
         sf.write(
 f'''
@@ -1148,6 +1150,7 @@ f'''    /* Export the module and publish it's API. */
     }}
 ''')
 
+    # XXX
     if _pyqt5(spec) or _pyqt6(spec):
         # Import the helpers.
         sf.write(
@@ -1205,6 +1208,7 @@ f'''
 
     # Generate the enum meta-type registrations for PyQt6 so that they can be
     # used in queued connections.
+    # XXX
     if _pyqt6(spec):
         for enum in spec.enums:
             if enum.module is not module or enum.fq_cpp_name is None:
@@ -1264,7 +1268,7 @@ f'''
     header_name = os.path.join(buildable.build_dir, f'sipAPI{module_name}.h')
 
     with SourceFile(header_name, "Internal module API header file.", module, project, buildable.headers) as sf:
-        _internal_api_header(sf, spec, bindings, py_debug, name_cache_list)
+        _internal_api_header(sf, spec, bindings, project, name_cache_list)
 
 
 def _name_cache_as_list(name_cache):
@@ -2128,10 +2132,10 @@ def _iface_file_cpp(spec, bindings, project, buildable, py_debug, iface_file,
 
     for mapped_type in spec.mapped_types:
         if mapped_type.iface_file is iface_file:
-            _mapped_type_cpp(sf, spec, bindings, mapped_type)
+            _mapped_type_cpp(sf, spec, bindings, project, mapped_type)
 
 
-def _mapped_type_cpp(sf, spec, bindings, mapped_type):
+def _mapped_type_cpp(sf, spec, bindings, project, mapped_type):
     """ Generate the C++ code for a mapped type version. """
 
     mapped_type_name = mapped_type.iface_file.fq_cpp_name.as_word
@@ -2273,25 +2277,24 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
     if cod_nrmethods > 0:
         needs_namespace = True
 
-    td_plugins = []
-    td_plugin_name = 'plugin_' + mapped_type_name
-    bindings.event_trigger(EventType.APPEND_MAPPED_TYPE_PLUGIN_CODE,
-            mapped_type, td_plugins, td_plugin_name)
+    # XXX need to check the ABI version or for extensions??? Haven't work out the API yet - generates the data structures here, calls sipTypeSetExtensionData() later on???
+    extension_data = []
+    for extension in project.build_system_extensions:
+        mapped_type_extension_name = f'extension_data_{extension.name}_{mapped_type_name}'
+        code = []
+        extension.append_mapped_type_extension_code(mapped_type,
+                mapped_type_extension_name, code)
 
-    if td_plugins:
-        if len(td_plugins) != 1:
-            raise UserException(
-                    "more than one build system package has provided a mapped type plugin")
+        if code:
+            sf.write('\n\n' + '\n'.join(code))
+            extension_data.append((extension.name, mapped_type_extension_name))
 
-        sf.write('\n\n' + td_plugins[0])
+    td_plugin_data = 'SIP_NULLPTR'
 
-        td_plugin_data = '&' + td_plugin_name
-    elif _pyqt6(spec) and mapped_type.pyqt_flags != 0:
+    if _pyqt6(spec) and mapped_type.pyqt_flags != 0:
         sf.write(f'\n\nstatic pyqt6MappedTypePluginDef plugin_{mapped_type_name} = {{{mapped_type.pyqt_flags}}};\n')
 
         td_plugin_data = '&' + td_plugin_name
-    else:
-        td_plugin_data = 'SIP_NULLPTR'
 
     sf.write(
 f'''
@@ -3459,6 +3462,7 @@ f'''    if (targetType == {sc_gto_name})
         public_dtor = klass.dtor is AccessSpecifier.PUBLIC
 
         if klass.can_create or public_dtor:
+            # XXX
             if (_pyqt5(spec) or _pyqt6(spec)) and klass.is_qobject and public_dtor:
                 need_ptr = need_cast_ptr = True
             elif klass.has_shadow:
@@ -3493,6 +3497,7 @@ f'''    if (targetType == {sc_gto_name})
             if release_gil:
                 sf.write('    Py_BEGIN_ALLOW_THREADS\n\n')
 
+            # XXX
             if (_pyqt5(spec) or _pyqt6(spec)) and klass.is_qobject and public_dtor:
                 # QObjects should only be deleted in the threads that they
                 # belong to.
@@ -3852,6 +3857,7 @@ def _shadow_code(sf, spec, bindings, klass):
         sf.write('    sipInstanceDestroyedEx(&sipPySelf);\n}\n')
 
     # The meta methods if required.
+    # XXX
     if (_pyqt5(spec) or _pyqt6(spec)) and klass.is_qobject:
         module_name = spec.module.py_name
         gto_name = _gto_name(klass)
@@ -5249,6 +5255,7 @@ f'''    class sip{protected_klass_base_name} : public {protected_klass_base_name
         sf.write(f'    {virtual_s}~sip{klass_name}(){throw_specifier};\n')
 
     # The metacall methods if required.
+    # XXX
     if (_pyqt5(spec) or _pyqt6(spec)) and klass.is_qobject:
         sf.write(
 '''
@@ -5668,6 +5675,7 @@ static sipPySlotDef slots_{klass_name}[] = {{
     # Generate any plugin-specific data structures.
     plugin_ref = 'SIP_NULLPTR'
 
+    # XXX
     if _pyqt5(spec) or _pyqt6(spec):
         if _pyqt_class_plugin(sf, spec, bindings, klass):
             plugin_ref = '&plugin_' + klass_name

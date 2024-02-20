@@ -18,6 +18,7 @@ from .abstract_project import AbstractProject
 from .bindings import Bindings
 from .configurable import Configurable, Option
 from .exceptions import deprecated, UserException
+from .generator import BuildSystemExtension
 from .module import resolve_abi_version
 from .py_versions import OLDEST_SUPPORTED_MINOR
 from .pyproject import PyProjectException, PyProjectOptionException
@@ -147,6 +148,7 @@ class Project(AbstractProject, Configurable):
         self.arguments = None
         self.bindings = collections.OrderedDict()
         self.bindings_factories = []
+        self.build_system_extensions = []
         self.builder = None
         self.buildables = []
         self.installables = []
@@ -245,6 +247,14 @@ class Project(AbstractProject, Configurable):
         self._remove_build_dir()
 
         return wheel_file
+
+    def call_build_system_extensions(self, method_name, *args):
+        """ Call an extension method for all registered build system
+        extensions.
+        """
+
+        for extension in self.build_system_extensions:
+            getattr(extension, method_name)(*args)
 
     def get_bindings_dir(self):
         """ Return the name of the 'bindings' directory relative to the
@@ -535,6 +545,23 @@ class Project(AbstractProject, Configurable):
         if pipe.returncode != 0 and fatal:
             raise UserException(
                     "'{0}' failed returning {1}".format(cmd, pipe.returncode))
+
+    def register_build_system_extension(self, name,
+            build_system_extension_factory):
+        """ Register a build system extension. """
+
+        # Sanity check the name.
+        for extension in self.build_system_extensions:
+            if extension.name == name:
+                raise UserException(
+                    "A build system extension called '{0}' has already been registered".format(name))
+
+        # Sanity check the extension.
+        if not issubclass(build_system_extension_factory, BuildSystemExtension):
+            raise UserException(
+                    "The build system extension must be a sub-class of sipbuild.BuildSystemExtension")
+
+        self.build_system_extensions.append(BuildSystemExtension(name, self))
 
     def run_command(self, args, *, fatal=True):
         """ Run a command and display the output if requested. """

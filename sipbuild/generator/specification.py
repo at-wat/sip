@@ -568,9 +568,9 @@ class Extendable:
     extension packages.
     """
 
-    # A dict of extension objects.  Each build system extension package
-    # potentially has an entry (keyed by a string specific to the package) of a
-    # package-specific object.
+    # A dict of extension objects.  Each build system extension potentially has
+    # an entry (keyed by a string specific to the build system extension) of a
+    # build system extension-specific object.
     extension_data: Optional[Dict[str, Any]] = None
 
 
@@ -1157,7 +1157,7 @@ class Overload:
     premethod_code: Optional[CodeBlock] = None
 
     # The PyQt method specifier.
-    # TODO
+    # XXX
     pyqt_method_specifier: Optional[PyQtMethodSpecifier] = None
 
     # Set if a Python exception is raised.
@@ -1309,7 +1309,7 @@ class Specification:
     plugins: List[str] = field(default_factory=list)
 
     # The QObject class.
-    # TODO
+    # XXX
     pyqt_qobject: Optional['WrappedClass'] = None
 
     # The list of typedefs.
@@ -1617,19 +1617,19 @@ class WrappedClass:
     properties: List[Property] = field(default_factory=list)
 
     # The /PyQtFlags/.
-    # TODO
+    # XXX
     pyqt_flags: int = 0
 
     # The /PyQtFlagsEnums/.
-    # TODO
+    # XXX
     pyqt_flags_enums: Optional[List[str]] = None
 
     # The /PyQtInterface/.
-    # TODO
+    # XXX
     pyqt_interface: Optional[str] = None
 
     # Set if /PyQtNoQMetaObject/ was specified.
-    # TODO
+    # XXX
     pyqt_no_qmetaobject: bool = False
 
     # The real class if this is a proxy or a namespace extender.

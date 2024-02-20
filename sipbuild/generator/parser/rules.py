@@ -3,7 +3,6 @@
 # Copyright (c) 2024 Phil Thompson <phil@riverbankcomputing.com>
 
 
-from ..event_types import EventType
 from ..scoped_name import ScopedName
 from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, ClassKey, Docstring, DocstringFormat, Extract,
@@ -918,8 +917,8 @@ def p_mapped_type_head(p):
     mapped_type = MappedType()
 
     annotations = p[3]
-    pm.bindings.event_trigger(EventType.PARSE_MAPPED_TYPE_ANNOTATIONS,
-            mapped_type, annotations)
+    pm.bindings.project.call_build_system_extensions(
+            'parse_mapped_type_annotations', mapped_type, annotations)
     pm.check_annotations(p, 3, annotations, _MAPPED_TYPE_ANNOTATIONS,
             "mapped type")
 
@@ -954,8 +953,8 @@ def p_mapped_type_template_head(p):
     mapped_type = MappedType()
 
     annotations = p[4]
-    pm.bindings.event_trigger(EventType.PARSE_MAPPED_TYPE_ANNOTATIONS,
-            mapped_type, annotations)
+    pm.bindings.project.call_build_system_extensions(
+            'parse_mapped_type_annotations', mapped_type, annotations)
     pm.check_annotations(p, 4, annotations, _MAPPED_TYPE_ANNOTATIONS,
             "mapped type")
 
@@ -998,6 +997,7 @@ def p_mapped_type_function(p):
         return
 
     annotations = p[9]
+    # XXX
     pm.check_annotations(p, 9, annotations, _FUNCTION_ANNOTATIONS, "function")
     pm.apply_type_annotations(p, 9, p[2], annotations)
 
@@ -1228,6 +1228,12 @@ def p_plugin(p):
 
     if pm.skipping:
         return
+
+    # %Plugin is incompatible with build system extensions.
+    # XXX - comment out for development
+    #if pm.bindings.project.build_system_extensions:
+    #    pm.parser_error(p, 1,
+    #            "%Plugin cannot be used with build system extensions")
 
     pm.deprecated(p, 1)
 
@@ -1791,6 +1797,7 @@ def p_class_head(p):
         return
 
     annotations = p[3]
+    # XXX
     pm.check_annotations(p, 3, annotations, _CLASS_ANNOTATIONS, "class")
 
     if p[2] is not None:
@@ -1822,6 +1829,7 @@ def p_struct_head(p):
         return
 
     annotations = p[3]
+    # XXX
     pm.check_annotations(p, 3, annotations, _CLASS_ANNOTATIONS, "class")
 
     pm.define_class(p, 1, ClassKey.STRUCT, p[1], annotations,
@@ -2007,6 +2015,7 @@ def p_ctor_decl(p):
         return
 
     annotations = p[6]
+    # XXX
     pm.check_annotations(p, 6, annotations, _CTOR_ANNOTATIONS, "constructor")
 
     pm.add_ctor(p, 1, p[3], annotations, exceptions=p[5], cpp_signature=p[7],
@@ -2039,6 +2048,7 @@ def p_dtor(p):
         return
 
     annotations = p[8]
+    # XXX
     pm.check_annotations(p, 8, annotations, _DTOR_ANNOTATIONS, "destructor")
 
     pm.add_dtor(p, 1, p[3], annotations, exceptions=p[6], abstract=p[7],
@@ -2180,6 +2190,7 @@ def p_enum_decl(p):
         return
 
     annotations = p[4]
+    # XXX
     pm.check_annotations(p, 4, annotations, _ENUM_ANNOTATIONS, "enum")
 
     pm.add_enum(p, 1, p[3], p[2], annotations, p[6])
@@ -2230,6 +2241,7 @@ def p_enum_line(p):
 
     if len(p) == 5:
         annotations = p[3]
+        # XXX
         pm.check_annotations(p, 3, annotations, _ENUM_MEMBER_ANNOTATIONS,
                 "enum member")
 
@@ -2268,6 +2280,7 @@ def p_exception(p):
 
     pm.cpp_only(p, 1, "%Exception")
     annotations = p[4]
+    # XXX
     pm.check_annotations(p, 4, annotations, _EXCEPTION_ANNOTATIONS,
             "exception")
 
@@ -2414,6 +2427,7 @@ def p_function_decl(p):
         return
 
     annotations = p[10]
+    # XXX
     pm.check_annotations(p, 10, annotations, _FUNCTION_ANNOTATIONS, "function")
     pm.apply_type_annotations(p, 10, p[1], annotations)
 
@@ -2447,6 +2461,7 @@ def p_operator_decl(p):
         return
 
     annotations = p[11]
+    # XXX
     pm.check_annotations(p, 11, annotations, _FUNCTION_ANNOTATIONS, "function")
     pm.apply_type_annotations(p, 11, p[1], annotations)
 
@@ -2500,6 +2515,7 @@ def p_operator_cast_decl(p):
         return
 
     annotations = p[10]
+    # XXX
     pm.check_annotations(p, 10, annotations, _FUNCTION_ANNOTATIONS, "function")
     pm.apply_type_annotations(p, 10, p[2], annotations)
 
@@ -2610,8 +2626,9 @@ def p_arg_type(p):
     arg = p[1]
     annotations = p[3]
 
-    #pm.bindings.event_trigger(EventType.PARSE_ARGUMENT_ANNOTATIONS, arg,
-    #        annotations)
+    #pm.bindings.project.call_build_system_extensions(
+    #        'parse_argument_annotations', arg, annotations)
+    # XXX
     pm.check_annotations(p, 3, annotations, _ARGUMENT_ANNOTATIONS, "argument")
 
     if p[2] is not None:
@@ -2993,6 +3010,7 @@ def p_namespace_head(p):
 
     pm.cpp_only(p, 1, "namespaces")
     annotations = p[2]
+    # XXX
     pm.check_annotations(p, 2, annotations, _NAMESPACE_ANNOTATIONS,
             "namespace")
 
@@ -3052,6 +3070,7 @@ def p_typedef_decl(p):
     fq_cpp_name = normalised_scoped_name(ScopedName(cpp_name), pm.scope)
     annotations = p[annos_symbol]
 
+    # XXX
     pm.check_annotations(p, annos_symbol, annotations, _TYPEDEF_ANNOTATIONS,
             "typedef")
     pm.apply_type_annotations(p, annos_symbol, type, annotations)
@@ -3129,6 +3148,7 @@ def p_union_head(p):
         return
 
     annotations = p[2]
+    # XXX
     pm.check_annotations(p, 2, annotations, _UNION_ANNOTATIONS, "union")
 
     pm.define_class(p, 1, ClassKey.UNION, p[1], annotations)
@@ -3174,6 +3194,7 @@ def p_variable(p):
 
     annotations = p[annos_symbol]
 
+    # XXX
     pm.check_annotations(p, annos_symbol, annotations, _VARIABLE_ANNOTATIONS,
             "variable")
     pm.apply_type_annotations(p, annos_symbol, type, annotations)

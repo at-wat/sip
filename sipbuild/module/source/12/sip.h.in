@@ -1678,6 +1678,14 @@ typedef struct _sipAPIDef {
      * The following are part of the public API.
      */
     PyObject *(*api_py_type_dict_ref)(PyTypeObject *);
+    void *(*api_type_get_extension_data)(const sipTypeDef *td,
+            const char *build_system_extension_name);
+
+    /*
+     * The following are not part of the public API.
+     */
+    int (*api_type_set_extension_data)(sipTypeDef *td,
+            const char *build_system_extension_name, void *data);
 } sipAPIDef;
 
 const sipAPIDef *sip_init_library(PyObject *mod_dict);

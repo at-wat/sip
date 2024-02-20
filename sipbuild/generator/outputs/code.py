@@ -243,6 +243,13 @@ f'''
 
     # These are dependent on the specific ABI version.
     if spec.abi_version >= (13, 0):
+        # ABI v13.8 and later.
+        if spec.abi_version >= (13, 8):
+            sf.write(
+f'''#define sipTypeGetExtensionData     sipAPI_{module_name}->api_type_get_extension_data
+#define sipTypeSetExtensionData     sipAPI_{module_name}->api_type_set_extension_data
+''')
+
         # ABI v13.6 and later.
         if spec.abi_version >= (13, 6):
             sf.write(
@@ -263,6 +270,13 @@ f'''#define sipIsEnumFlag               sipAPI_{module_name}->api_is_enum_flag
 #define sipReleaseTypeUS            sipAPI_{module_name}->api_release_type_us
 ''')
     else:
+        # ABI v12.15 and later.
+        if spec.abi_version >= (12, 15):
+            sf.write(
+f'''#define sipTypeGetExtensionData     sipAPI_{module_name}->api_type_get_extension_data
+#define sipTypeSetExtensionData     sipAPI_{module_name}->api_type_set_extension_data
+''')
+
         # ABI v12.13 and later.
         if spec.abi_version >= (12, 13):
             sf.write(

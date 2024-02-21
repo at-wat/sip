@@ -569,8 +569,8 @@ class Extendable:
     """
 
     # A dict of extension objects.  Each build system extension potentially has
-    # an entry (keyed by a string specific to the build system extension) of a
-    # build system extension-specific object.
+    # an entry (keyed by the build system name) of a build system
+    # extension-specific object.
     extension_data: Optional[Dict[str, Any]] = None
 
 
@@ -878,7 +878,7 @@ class MappedType(Extendable):
     # The Python name.  It will be None for mapped type templates.
     py_name: Optional[CachedName] = None
 
-    # The /PyQtFlags/.  Remove in SIP v7.
+    # The /PyQtFlags/.  PyQt6 only, remove in SIP v7.
     pyqt_flags: int = 0
 
     # The %ReleaseCode.
@@ -1452,7 +1452,7 @@ class VisibleMember:
 
 
 @dataclass
-class WrappedClass:
+class WrappedClass(Extendable):
     """ Encapsulate a wrapped C/C++ namespace/class/struct/union. """
 
     # The interface file.
@@ -1616,19 +1616,20 @@ class WrappedClass:
     # The properties.
     properties: List[Property] = field(default_factory=list)
 
-    # The /PyQtFlags/.
+    # The /PyQtFlags/.  PyQt5 only, remove in SIP v7.
     # XXX
     pyqt_flags: int = 0
 
-    # The /PyQtFlagsEnums/.
+    # The /PyQtFlagsEnums/.  PyQt5 only, remove in SIP v7.
     # XXX
     pyqt_flags_enums: Optional[List[str]] = None
 
-    # The /PyQtInterface/.
+    # The /PyQtInterface/.  PyQt5 and PyQt6, remove in SIP v7.
     # XXX
     pyqt_interface: Optional[str] = None
 
-    # Set if /PyQtNoQMetaObject/ was specified.
+    # Set if /PyQtNoQMetaObject/ was specified.  PyQt5 and PyQt6, remove in SIP
+    # v7.
     # XXX
     pyqt_no_qmetaobject: bool = False
 

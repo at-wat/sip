@@ -561,7 +561,8 @@ class Project(AbstractProject, Configurable):
             raise UserException(
                     "The build system extension must be a sub-class of sipbuild.BuildSystemExtension")
 
-        self.build_system_extensions.append(BuildSystemExtension(name, self))
+        self.build_system_extensions.append(
+                build_system_extension_factory(name, self))
 
     def run_command(self, args, *, fatal=True):
         """ Run a command and display the output if requested. """

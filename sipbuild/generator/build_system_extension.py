@@ -17,13 +17,19 @@ class BuildSystemExtension:
         extendeable object, optionally creating it if necessary.
         """
 
-        try:
-            return extendable.extension_data[self.name]
-        except KeyError:
-            pass
+        if extendable.extension_data is None:
+            if factory is None:
+                return None
 
-        if factory is None:
-            return None
+            extendable.extension_data = {}
+        else:
+            try:
+                return extendable.extension_data[self.name]
+            except KeyError:
+                pass
+
+            if factory is None:
+                return None
 
         extension_data = factory()
         extendable.extension_data[self.name] = extension_data

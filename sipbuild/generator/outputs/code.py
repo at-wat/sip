@@ -490,6 +490,48 @@ def _module_code(spec, bindings, project, py_debug, buildable):
 
     sf.write_code(module.unit_postinclude_code)
 
+    # Transform the name cache.
+    name_cache_list = _name_cache_as_list(spec.name_cache)
+
+    # Define the names.
+    _name_cache(sf, spec, name_cache_list)
+
+    # Generate the interface source files.
+    extension_data = []
+
+    for iface_file in spec.iface_files:
+        if iface_file.module is module and iface_file.type is not IfaceFileType.EXCEPTION:
+            need_postinc = False
+            use_sf = None
+
+            if parts:
+                if files_in_part == max_per_part:
+                    # Close the old part.
+                    sf.close()
+
+                    # Create a new one.
+                    files_in_part = 1
+                    this_part += 1
+
+                    source_name = _make_part_name(buildable, module_name,
+                            this_part, source_suffix)
+                    sf = CompilationUnit(source_name, "Module code.", module,
+                            project, buildable)
+
+                    need_postinc = True
+                else:
+                    files_in_part += 1
+
+                if iface_file.file_extension is None:
+                    # The interface file should use this source file rather
+                    # than create one of its own.
+                    use_sf = sf
+
+            _iface_file_cpp(spec, bindings, project, buildable, py_debug,
+                    iface_file, need_postinc, source_suffix, extension_data,
+                    use_sf)
+
+
     # If there should be a Qt support API then generate stubs values for the
     # optional parts.  These should be undefined in %ModuleCode if a C++
     # implementation is provided.
@@ -502,12 +544,6 @@ def _module_code(spec, bindings, project, py_debug, buildable):
 #define sipQtConnectPySignal                0
 #define sipQtDisconnectPySignal             0
 ''')
-
-    # Transform the name cache.
-    name_cache_list = _name_cache_as_list(spec.name_cache)
-
-    # Define the names.
-    _name_cache(sf, spec, name_cache_list)
 
     # Generate the C++ code blocks.
     sf.write_code(module.module_code)
@@ -1150,6 +1186,16 @@ sip_qt_metacast_func sip_{module_name}_qt_metacast;
 
     _sip_api(sf, spec)
 
+    # Set any build system extension data.
+    if extension_data:
+        sf.write('    /* Set the extension data from the build system extensions. */\n')
+
+        for wrapped_object, extension_name, data_name in extension_data:
+            gto_name = _gto_name(wrapped_object)
+            sf.write(f'    sipTypeSetExtensionData({gto_name}, "{extension_name}", &{data_name});\n')
+
+        sf.write('\n')
+
     # Generate any initialisation code.
     sf.write_code(module.initialisation_code)
 
@@ -1244,38 +1290,6 @@ f'''
     return sipModule;
 }
 ''')
-
-    # Generate the interface source files.
-    for iface_file in spec.iface_files:
-        if iface_file.module is module and iface_file.type is not IfaceFileType.EXCEPTION:
-            need_postinc = False
-            use_sf = None
-
-            if parts:
-                if files_in_part == max_per_part:
-                    # Close the old part.
-                    sf.close()
-
-                    # Create a new one.
-                    files_in_part = 1
-                    this_part += 1
-
-                    source_name = _make_part_name(buildable, module_name,
-                            this_part, source_suffix)
-                    sf = CompilationUnit(source_name, "Module code.", module,
-                            project, buildable)
-
-                    need_postinc = True
-                else:
-                    files_in_part += 1
-
-                if iface_file.file_extension is None:
-                    # The interface file should use this source file rather
-                    # than create one of its own.
-                    use_sf = sf
-
-            _iface_file_cpp(spec, bindings, project, buildable, py_debug,
-                    iface_file, need_postinc, source_suffix, use_sf)
 
     sf.close()
 
@@ -2094,7 +2108,7 @@ def _empty_iface_file(spec, iface_file):
 
 
 def _iface_file_cpp(spec, bindings, project, buildable, py_debug, iface_file,
-        need_postinc, source_suffix, sf):
+        need_postinc, source_suffix, extension_data, sf):
     """ Generate the C/C++ code for an interface. """
 
     # Check that there will be something in the file so that we don't get
@@ -2146,10 +2160,11 @@ def _iface_file_cpp(spec, bindings, project, buildable, py_debug, iface_file,
 
     for mapped_type in spec.mapped_types:
         if mapped_type.iface_file is iface_file:
-            _mapped_type_cpp(sf, spec, bindings, project, mapped_type)
+            _mapped_type_cpp(sf, spec, bindings, project, mapped_type,
+                    extension_data)
 
 
-def _mapped_type_cpp(sf, spec, bindings, project, mapped_type):
+def _mapped_type_cpp(sf, spec, bindings, project, mapped_type, extension_data):
     """ Generate the C++ code for a mapped type version. """
 
     mapped_type_name = mapped_type.iface_file.fq_cpp_name.as_word
@@ -2291,8 +2306,8 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
     if cod_nrmethods > 0:
         needs_namespace = True
 
-    # XXX need to check the ABI version or for extensions??? Haven't work out the API yet - generates the data structures here, calls sipTypeSetExtensionData() later on???
-    extension_data = []
+    # Generate any build system extension data for the mapped type and add to
+    # the list of all extension data.
     for extension in project.build_system_extensions:
         mapped_type_extension_name = f'extension_data_{extension.name}_{mapped_type_name}'
         code = []
@@ -2301,7 +2316,8 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
 
         if code:
             sf.write('\n\n' + '\n'.join(code))
-            extension_data.append((extension.name, mapped_type_extension_name))
+            extension_data.append(
+                    (mapped_type, extension.name, mapped_type_extension_name))
 
     td_plugin_data = 'SIP_NULLPTR'
 

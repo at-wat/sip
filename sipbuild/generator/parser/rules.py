@@ -918,7 +918,8 @@ def p_mapped_type_head(p):
 
     annotations = p[3]
     pm.bindings.project.call_build_system_extensions(
-            'parse_mapped_type_annotations', mapped_type, annotations)
+            'parse_mapped_type_annotations', mapped_type, annotations,
+            (pm, p, 3))
     pm.check_annotations(p, 3, annotations, _MAPPED_TYPE_ANNOTATIONS,
             "mapped type")
 
@@ -954,7 +955,8 @@ def p_mapped_type_template_head(p):
 
     annotations = p[4]
     pm.bindings.project.call_build_system_extensions(
-            'parse_mapped_type_annotations', mapped_type, annotations)
+            'parse_mapped_type_annotations', mapped_type, annotations,
+            (pm, p, 4))
     pm.check_annotations(p, 4, annotations, _MAPPED_TYPE_ANNOTATIONS,
             "mapped type")
 

@@ -1455,15 +1455,6 @@ class VisibleMember:
 class WrappedClass(Extendable):
     """ Encapsulate a wrapped C/C++ namespace/class/struct/union. """
 
-    # The interface file.
-    iface_file: IfaceFile
-
-    # The Python name.
-    py_name: CachedName
-
-    # The enclosing scope.
-    scope: Optional['WrappedClass']
-
     # The %BIGetBufferCode.
     bi_get_buffer_code: Optional[CodeBlock] = None
 
@@ -1551,6 +1542,9 @@ class WrappedClass(Extendable):
     # Set if the class has variables that need handlers. (resolver)
     has_variable_handlers: bool = False
 
+    # The interface file.
+    iface_file: Optional[IfaceFile] = None
+
     # The %InstanceCode.
     instance_code: Optional[CodeBlock] = None
 
@@ -1616,6 +1610,9 @@ class WrappedClass(Extendable):
     # The properties.
     properties: List[Property] = field(default_factory=list)
 
+    # The Python name.
+    py_name: Optional[CachedName] = None
+
     # The /PyQtFlags/.  PyQt5 only, remove in SIP v7.
     # XXX
     pyqt_flags: int = 0
@@ -1635,6 +1632,9 @@ class WrappedClass(Extendable):
 
     # The real class if this is a proxy or a namespace extender.
     real_class: Optional['WrappedClass'] = None
+
+    # The enclosing scope.
+    scope: Optional['WrappedClass']
 
     # The sub-class base class. (resolver)
     subclass_base: Optional['WrappedClass'] = None

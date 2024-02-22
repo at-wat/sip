@@ -1800,6 +1800,7 @@ def p_class_head(p):
 
     annotations = p[3]
     # XXX
+    #ZZZ
     pm.check_annotations(p, 3, annotations, _CLASS_ANNOTATIONS, "class")
 
     if p[2] is not None:
@@ -1832,6 +1833,7 @@ def p_struct_head(p):
 
     annotations = p[3]
     # XXX
+    #ZZZ
     pm.check_annotations(p, 3, annotations, _CLASS_ANNOTATIONS, "class")
 
     pm.define_class(p, 1, ClassKey.STRUCT, p[1], annotations,
@@ -3011,13 +3013,14 @@ def p_namespace_head(p):
         return
 
     pm.cpp_only(p, 1, "namespaces")
-    annotations = p[2]
-    # XXX
-    pm.check_annotations(p, 2, annotations, _NAMESPACE_ANNOTATIONS,
-            "namespace")
-
     namespace = pm.new_class(p, 1, IfaceFileType.NAMESPACE,
             normalised_scoped_name(p[1], pm.scope))
+
+    annotations = p[2]
+    pm.bindings.project.call_build_system_extensions(
+            'parse_namespace_annotations', namespace, annotations, (pm, p, 2))
+    pm.check_annotations(p, 2, annotations, _NAMESPACE_ANNOTATIONS,
+            "namespace")
 
     namespace.pyqt_no_qmetaobject = annotations.get('PyQtNoQMetaObject', False)
 
@@ -3147,6 +3150,7 @@ def p_union_head(p):
 
     annotations = p[2]
     # XXX
+    #ZZZ
     pm.check_annotations(p, 2, annotations, _UNION_ANNOTATIONS, "union")
 
     pm.define_class(p, 1, ClassKey.UNION, p[1], annotations)

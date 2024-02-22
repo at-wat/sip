@@ -594,8 +594,9 @@ def _get_proxy(mod, klass):
         if proxy.iface_file is klass.iface_file:
             return proxy
 
-    proxy = WrappedClass(klass.iface_file, klass.py_name, scope=klass.scope,
-            mro=klass.mro, real_class=klass, superclasses=klass.superclasses)
+    proxy = WrappedClass(iface_file=klass.iface_file, mro=klass.mro,
+            py_name=klass.py_name, real_class=klass, scope=klass.scope,
+            superclasses=klass.superclasses)
 
     mod.proxies.insert(0, proxy)
 

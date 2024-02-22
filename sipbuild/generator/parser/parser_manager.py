@@ -250,9 +250,10 @@ class ParserManager:
         """ Create a new class and make it the current scope. """
 
         klass = self.new_class(p, symbol, IfaceFileType.CLASS,
-                normalised_scoped_name(scoped_name, self.scope),
-                virtual_error_handler=annotations.get('VirtualErrorHandler'),
-                type_hints=self.get_type_hints(p, symbol, annotations))
+                normalised_scoped_name(scoped_name, self.scope))
+
+        klass.virtual_error_handler = annotations.get('VirtualErrorHandler')
+        klass.type_hints = self.get_type_hints(p, symbol, annotations)
 
         klass.class_key = class_key
         klass.superclasses = superclasses
@@ -338,8 +339,7 @@ class ParserManager:
 
         return w_exception
 
-    def new_class(self, p, symbol, iface_file_type, fq_cpp_name,
-            virtual_error_handler=None, type_hints=None):
+    def new_class(self, p, symbol, iface_file_type, fq_cpp_name):
         """ Create a new, unannotated class and add it to the current scope.
         """
 
@@ -377,8 +377,6 @@ class ParserManager:
         # Complete the initialisation.
         klass.scope = scope
         klass.iface_file.module = self.module_state.module
-        klass.virtual_error_handler = virtual_error_handler
-        klass.type_hints = type_hints
 
         if type_header_code is not None:
             klass.iface_file.type_header_code.extend(type_header_code)
@@ -419,8 +417,9 @@ class ParserManager:
                 return klass
 
         # Create a new one.
-        klass = WrappedClass(iface_file,
-                cached_name(self.spec, iface_file.fq_cpp_name.base_name), None)
+        klass = WrappedClass(iface_file=iface_file,
+                py_name=cached_name(self.spec,
+                        iface_file.fq_cpp_name.base_name))
 
         if tmpl_arg:
             self._template_arg_classes.append(klass)

@@ -11330,16 +11330,6 @@ static int sip_api_is_user_type(const sipWrapperType *wt)
 static int sip_api_check_plugin_for_type(const sipTypeDef *td,
         const char *name)
 {
-    /*
-     * The current thinking on plugins is that SIP v7 will look for a plugin
-     * with a name derived from the name as the current module in the same
-     * directory as the .sip defining the module (ie. no %Plugin directive).  A
-     * module hierachy may have multiple plugins but they must co-operate.  If
-     * a plugin generates user data then it should include a void* (and a
-     * run-time API) so that other plugins can extend it further.  This
-     * approach means that a plugin's user data structure can be opaque.
-     */
-
     sipExportedModuleDef *em = td->td_module;
     sipImportedModuleDef *im;
 

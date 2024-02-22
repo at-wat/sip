@@ -2151,12 +2151,13 @@ def _iface_file_cpp(spec, bindings, project, buildable, py_debug, iface_file,
             continue
 
         if klass.iface_file is iface_file:
-            _class_cpp(sf, spec, bindings, klass, py_debug)
+            _class_cpp(sf, spec, bindings, klass, extension_data, py_debug)
 
             # Generate any enclosed protected classes.
             for proto_klass in spec.classes:
                 if proto_klass.is_protected and proto_klass.scope is klass:
-                    _class_cpp(sf, spec, bindings, proto_klass, py_debug)
+                    _class_cpp(sf, spec, bindings, proto_klass, extension_data,
+                            py_debug)
 
     for mapped_type in spec.mapped_types:
         if mapped_type.iface_file is iface_file:
@@ -2397,7 +2398,7 @@ f'''        0, SIP_NULLPTR,
 ''')
 
 
-def _class_cpp(sf, spec, bindings, klass, py_debug):
+def _class_cpp(sf, spec, bindings, klass, extension_data, py_debug):
     """ Generate the C++ code for a class. """
 
     sf.write_code(klass.type_code)
@@ -2429,7 +2430,7 @@ f'''static PyObject *convertFrom_{name}(void *sipCppV, PyObject *{xfer})
 
             sf.write('}\n')
 
-    _type_definition(sf, spec, bindings, klass, py_debug)
+    _type_definition(sf, spec, bindings, klass, extension_data, py_debug)
 
 
 def _get_function_table(members):
@@ -5550,7 +5551,7 @@ def _argument_variable(sf, spec, scope, arg, arg_nr):
                 sf.write(f'        PyObject *{arg_name}Keep{supporting_default_value};\n')
 
 
-def _type_definition(sf, spec, bindings, klass, py_debug):
+def _type_definition(sf, spec, bindings, klass, extension_data, py_debug):
     """ Generate the type structure that contains all the information needed by
     the meta-type.  A sub-set of this is used to extend namespaces.
     """
@@ -5702,10 +5703,20 @@ static sipPySlotDef slots_{klass_name}[] = {{
     else:
         docstring_ref = 'SIP_NULLPTR'
 
-    # Generate any plugin-specific data structures.
+    # Generate any build system extension data structures.
+    for extension in project.build_system_extensions:
+        klass_extension_name = f'extension_data_{extension.name}_{klass_name}'
+        code = []
+        extension.append_class_extension_code(klass, klass_extension_name,
+                code)
+
+        if code:
+            sf.write('\n\n' + '\n'.join(code))
+            extension_data.append(
+                    (klass, extension.name, klass_extension_name))
+
     plugin_ref = 'SIP_NULLPTR'
 
-    # XXX
     if _pyqt5(spec) or _pyqt6(spec):
         if _pyqt_class_plugin(sf, spec, bindings, klass):
             plugin_ref = '&plugin_' + klass_name

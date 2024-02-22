@@ -126,6 +126,13 @@ class BuildSystemExtension:
 
     # The rest of the class are the stubs to be re-implemented by sub-classes.
 
+    def append_class_extension_code(self, extendable, name, code):
+        """ Append code fragments that implements a class extension data
+        structure.
+        """
+
+        pass
+
     def append_mapped_type_extension_code(self, extendable, name, code):
         """ Append code fragments that implements a mapped type extension data
         structure.

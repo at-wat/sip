@@ -111,6 +111,9 @@ class ParserManager:
                 annotations)
         klass.py_name = cached_name(self.spec, py_name)
 
+        klass.virtual_error_handler = annotations.get('VirtualErrorHandler')
+        klass.type_hints = self.get_type_hints(p, symbol, annotations)
+
         klass.no_type_hint = annotations.get('NoTypeHint', False)
 
         metatype = annotations.get('Metatype')
@@ -245,21 +248,20 @@ class ParserManager:
 
         return klass
 
-    def define_class(self, p, symbol, class_key, scoped_name, annotations,
+    def define_class(self, p, symbol, class_key, scoped_name,
             superclasses=None):
-        """ Create a new class and make it the current scope. """
+        """ Create and return a new class and make it the current scope. """
 
         klass = self.new_class(p, symbol, IfaceFileType.CLASS,
                 normalised_scoped_name(scoped_name, self.scope))
-
-        klass.virtual_error_handler = annotations.get('VirtualErrorHandler')
-        klass.type_hints = self.get_type_hints(p, symbol, annotations)
 
         klass.class_key = class_key
         klass.superclasses = superclasses
 
         self.push_scope(klass,
                 AccessSpecifier.PRIVATE if class_key is ClassKey.CLASS else AccessSpecifier.PUBLIC)
+
+        return klass
 
     def disambiguate_token(self, value, keywords):
         """ Disambiguate a token by inspecting its value. """

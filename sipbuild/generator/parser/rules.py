@@ -924,7 +924,6 @@ def p_mapped_type_head(p):
             "mapped type")
 
     pm.add_mapped_type(p, 1, mapped_type, p[2], annotations)
-
     pm.annotate_mapped_type(p, 3, mapped_type, annotations)
 
 
@@ -1798,15 +1797,15 @@ def p_class_head(p):
     if pm.skipping:
         return
 
+    klass = pm.define_class(p, 1, ClassKey.CLASS, p[1], superclasses=p[2])
+
     annotations = p[3]
-    # XXX
-    #ZZZ
+    pm.bindings.project.call_build_system_extensions(
+            'parse_class_annotations', klass, annotations, (pm, p, 3))
     pm.check_annotations(p, 3, annotations, _CLASS_ANNOTATIONS, "class")
 
     if p[2] is not None:
         pm.cpp_only(p, 2, "super-classes")
-
-    pm.define_class(p, 1, ClassKey.CLASS, p[1], annotations, superclasses=p[2])
 
     # Return the annotations.
     p[0] = p[3]
@@ -1831,13 +1830,12 @@ def p_struct_head(p):
     if pm.skipping:
         return
 
-    annotations = p[3]
-    # XXX
-    #ZZZ
-    pm.check_annotations(p, 3, annotations, _CLASS_ANNOTATIONS, "class")
+    klass = pm.define_class(p, 1, ClassKey.STRUCT, p[1], superclasses=p[2])
 
-    pm.define_class(p, 1, ClassKey.STRUCT, p[1], annotations,
-            superclasses=p[2])
+    annotations = p[3]
+    pm.bindings.project.call_build_system_extensions(
+            'parse_struct_annotations', klass, annotations, (pm, p, 3))
+    pm.check_annotations(p, 3, annotations, _CLASS_ANNOTATIONS, "class")
 
     # Return the annotations.
     p[0] = p[3]
@@ -2630,9 +2628,8 @@ def p_arg_type(p):
     arg = p[1]
     annotations = p[3]
 
-    #pm.bindings.project.call_build_system_extensions(
-    #        'parse_argument_annotations', arg, annotations)
-    # XXX
+    pm.bindings.project.call_build_system_extensions(
+            'parse_argument_annotations', arg, annotations, (pm, p, 3))
     pm.check_annotations(p, 3, annotations, _ARGUMENT_ANNOTATIONS, "argument")
 
     if p[2] is not None:
@@ -3148,12 +3145,12 @@ def p_union_head(p):
     if pm.skipping:
         return
 
-    annotations = p[2]
-    # XXX
-    #ZZZ
-    pm.check_annotations(p, 2, annotations, _UNION_ANNOTATIONS, "union")
+    klass = pm.define_class(p, 1, ClassKey.UNION, p[1])
 
-    pm.define_class(p, 1, ClassKey.UNION, p[1], annotations)
+    annotations = p[2]
+    pm.bindings.project.call_build_system_extensions(
+            'parse_union_annotations', klass, annotations, (pm, p, 2))
+    pm.check_annotations(p, 2, annotations, _UNION_ANNOTATIONS, "union")
 
     # Return the annotations.
     p[0] = annotations

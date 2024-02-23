@@ -690,14 +690,11 @@ class CodeBlock:
 
 
 @dataclass
-class Constructor:
+class Constructor(Extendable):
     """ Encapsulate a constructor. """
 
     # The access specifier.
-    access_specifier: AccessSpecifier
-
-    # The Python signature.
-    py_signature: 'Signature'
+    access_specifier: Optional[AccessSpecifier] = None
 
     # The C/C++ signature.  It will be none if /NoDerived/ was specified.
     cpp_signature: Optional['Signature'] = None
@@ -731,6 +728,9 @@ class Constructor:
 
     # The code specified by any %PreMethodCode directive.
     premethod_code: Optional[CodeBlock] = None
+
+    # The Python signature.
+    py_signature: Optional['Signature'] = None
 
     # Set if a Python exception is raised.
     raises_py_exception: bool = False

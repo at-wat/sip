@@ -5,12 +5,12 @@
 
 from ..scoped_name import ScopedName
 from ..specification import (AccessSpecifier, Argument, ArgumentType,
-        ArrayArgument, ClassKey, Docstring, DocstringFormat, Extract,
-        FunctionCall, IfaceFile, IfaceFileType, KwArgs, License, MappedType,
-        MappedTypeTemplate, Overload, Property, PyQtMethodSpecifier,
-        QualifierType, Signature, Template, ThrowArguments, Value, ValueType,
-        VirtualErrorHandler, WrappedEnum, WrappedEnumMember, WrappedTypedef,
-        WrappedVariable)
+        ArrayArgument, ClassKey, Constructor, Docstring, DocstringFormat,
+        Extract, FunctionCall, IfaceFile, IfaceFileType, KwArgs, License,
+        MappedType, MappedTypeTemplate, Overload, Property,
+        PyQtMethodSpecifier, QualifierType, Signature, Template,
+        ThrowArguments, Value, ValueType, VirtualErrorHandler, WrappedEnum,
+        WrappedEnumMember, WrappedTypedef, WrappedVariable)
 from ..templates import same_template_signature
 from ..utils import cached_name, normalised_scoped_name, search_typedefs
 
@@ -2005,16 +2005,13 @@ def p_ctor_decl(p):
     if pm.skipping:
         return
 
-    # XXX
-    #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotation', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    ctor = Constructor(cpp_signature=p[7], docstring=p[9],
+            premethod_code=p[10], throw_args=p[5], method_code=p[11])
 
-    annotations = p[6]
-    #pm.check_annotations(p, 6, annotations, _CTOR_ANNOTATIONS, "constructor")
+    annotations = pm.validate_annotations(p[6], 'parse_ctor_annotation', ctor,
+            _CTOR_ANNOTATIONS, "constructor")
 
-    pm.add_ctor(p, 1, p[3], annotations, exceptions=p[5], cpp_signature=p[7],
-            docstring=p[9], premethod_code=p[10], method_code=p[11])
+    pm.complete_ctor(p, 1, ctor, p[3], annotations)
 
 
 def p_opt_ctor_signature(p):

@@ -431,9 +431,10 @@ class ParserManager:
 
         return klass
 
-    def add_ctor(self, p, symbol, arg_list, annotations, *, exceptions,
-            cpp_signature, docstring, premethod_code, method_code):
-        """ Create a Constructor and add it to the current scope. """
+    def complete_ctor(self, p, symbol, ctor, arg_list, annotations):
+        """ Complete the definition of a Constructor and add it to the current
+        scope.
+        """
 
         scope = self.scope
 
@@ -442,7 +443,7 @@ class ParserManager:
             self.parser_error(p, symbol,
                     "constructor doesn't have the same name as its class")
 
-        if bool(self.c_bindings) and len(arg_list) != 0 and method_code is None:
+        if bool(self.c_bindings) and len(arg_list) != 0 and ctor.method_code is None:
             self.parser_error(p, symbol,
                     "constructors with arguments in C modules must specify %MethodCode")
 
@@ -458,26 +459,25 @@ class ParserManager:
 
         # Handle the signatures allowing it to be used like a function
         # signature.
-        py_signature = Signature(args=arg_list,
+        ctor.py_signature = Signature(args=arg_list,
                 result=Argument(ArgumentType.VOID))
-        self._check_ellipsis(p, symbol, py_signature)
+        self._check_ellipsis(p, symbol, ctor.py_signature)
 
         # Configure the constructor.
-        ctor = Constructor(access_specifier, py_signature)
+        ctor.access_specifier = access_specifier
 
         if annotations.get("NoDerived", False):
-            if cpp_signature is not None:
+            if ctor.cpp_signature is not None:
                 self.parser_error(p, symbol,
                         "/NoDerived/ may not be specified with an explicit C++ signature")
 
-            if method_code is None:
+            if ctor.method_code is None:
                 self.parser_error(p, symbol,
                         "%MethodCode must also be specified if /NoDerived/ is specified")
-        elif cpp_signature is None:
-            ctor.cpp_signature = py_signature
+        elif ctor.cpp_signature is None:
+            ctor.cpp_signature = ctor.py_signature
         else:
-            self._check_ellipsis(p, symbol, cpp_signature)
-            ctor.cpp_signature = cpp_signature
+            self._check_ellipsis(p, symbol, cpp.cpp_signature)
 
         if annotations.get("Default", False):
             if scope.default_ctor is None:
@@ -486,26 +486,22 @@ class ParserManager:
                 self.parser_error(p, symbol,
                         "/Default/ has already been specified for another constructor")
 
-        ctor.docstring = docstring
         ctor.gil_action = self._get_gil_action(p, symbol, annotations)
         ctor.deprecated = annotations.get('Deprecated', False)
 
         if access_specifier is not AccessSpecifier.PRIVATE:
             ctor.kw_args = self._get_kw_args(p, symbol, annotations,
-                    py_signature)
+                    ctor.py_signature)
             scope.can_create = True
 
             if access_specifier is AccessSpecifier.PROTECTED:
                 scope.needs_shadow = True
 
-        ctor.method_code = method_code
         ctor.no_type_hint = annotations.get('NoTypeHint', False)
         ctor.posthook = annotations.get('PostHook')
         ctor.prehook = annotations.get('PreHook')
-        ctor.premethod_code = premethod_code
-        ctor.throw_args = exceptions
 
-        if method_code is None and annotations.get('NoRaisesPyException') is None:
+        if ctor.method_code is None and annotations.get('NoRaisesPyException') is None:
             if self.module_state.all_raise_py_exception or annotations.get('RaisesPyException', False):
                 ctor.raises_py_exception = True
 

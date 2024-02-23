@@ -1671,20 +1671,17 @@ class WrappedClass(Extendable):
 
 
 @dataclass
-class WrappedEnum:
+class WrappedEnum(Extendable):
     """ Encapsulate a wrapped enum. """
 
     # The base type.
-    base_type: EnumBaseType
-
-    # The fully qualified C++ name.
-    fq_cpp_name: Optional[ScopedName]
-
-    # The defining module.
-    module: Module
+    base_type: Optional[EnumBaseType] = None
 
     # The cached fully qualified C++ name.
     cached_fq_cpp_name: Optional[CachedName] = None
+
+    # The fully qualified C++ name.
+    fq_cpp_name: Optional[ScopedName] = None
 
     # Set if the enum is defined in a protected section.
     is_protected: bool = False
@@ -1694,6 +1691,9 @@ class WrappedEnum:
 
     # The members.
     members: List['WrappedEnumMember'] = field(default_factory=list)
+
+    # The defining module.
+    module: Optional[Module] = None
 
     # Set if this enum is needed by the module for which code is to be
     # generated. (resolver)

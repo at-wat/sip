@@ -9,7 +9,7 @@ from ..specification import (AccessSpecifier, Argument, ArgumentType,
         FunctionCall, IfaceFile, IfaceFileType, KwArgs, License, MappedType,
         MappedTypeTemplate, Overload, Property, PyQtMethodSpecifier,
         QualifierType, Signature, Template, ThrowArguments, Value, ValueType,
-        VirtualErrorHandler, WrappedEnumMember, WrappedTypedef,
+        VirtualErrorHandler, WrappedEnum, WrappedEnumMember, WrappedTypedef,
         WrappedVariable)
 from ..templates import same_template_signature
 from ..utils import cached_name, normalised_scoped_name, search_typedefs
@@ -917,9 +917,8 @@ def p_mapped_type_head(p):
 
     mapped_type = MappedType()
 
-    annotations = pm.validate_annotations(p[3],
-            'parse_mapped_type_annotations', mapped_type,
-            _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    annotations = pm.validate_annotations(p[3], 'parse_mapped_type_annotation',
+            mapped_type, _MAPPED_TYPE_ANNOTATIONS, "mapped type")
 
     pm.add_mapped_type(p, 1, mapped_type, p[2], annotations)
     pm.annotate_mapped_type(p, 3, mapped_type, annotations)
@@ -950,9 +949,8 @@ def p_mapped_type_template_head(p):
 
     mapped_type = MappedType()
 
-    annotations = pm.validate_annotations(p[4],
-            'parse_mapped_type_annotations', mapped_type,
-            _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    annotations = pm.validate_annotations(p[4], 'parse_mapped_type_annotation',
+            mapped_type, _MAPPED_TYPE_ANNOTATIONS, "mapped type")
 
     # Use a dummy interface file.
     mapped_type.iface_file = IfaceFile(IfaceFileType.MAPPED_TYPE)
@@ -994,7 +992,7 @@ def p_mapped_type_function(p):
 
     # XXX
     #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
+    #        'parse_mapped_type_annotation', mapped_type,
     #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
 
     annotations = p[9]
@@ -1802,8 +1800,8 @@ def p_class_head(p):
     klass = pm.define_class(p, 1, ClassKey.CLASS, p[1], superclasses=p[2])
 
     # Return the annotations.
-    p[0] = pm.validate_annotations(p[3], 'parse_class_annotations', klass,
-            _CLASSE_ANNOTATIONS, "class")
+    p[0] = pm.validate_annotations(p[3], 'parse_class_annotation', klass,
+            _CLASS_ANNOTATIONS, "class")
 
 
 def p_struct_decl(p):
@@ -1828,7 +1826,7 @@ def p_struct_head(p):
     klass = pm.define_class(p, 1, ClassKey.STRUCT, p[1], superclasses=p[2])
 
     # Return the annotations.
-    p[0] = pm.validate_annotations(p[3], 'class_annotations', klass,
+    p[0] = pm.validate_annotations(p[3], 'parse_class_annotation', klass,
             _CLASS_ANNOTATIONS, "class")
 
 
@@ -2009,7 +2007,7 @@ def p_ctor_decl(p):
 
     # XXX
     #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
+    #        'parse_mapped_type_annotation', mapped_type,
     #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
 
     annotations = p[6]
@@ -2044,7 +2042,7 @@ def p_dtor(p):
     if pm.skipping:
         return
 
-    annotations = pm.validate_annotations(p[8], 'parse_dtor_annotations',
+    annotations = pm.validate_annotations(p[8], 'parse_dtor_annotation',
             pm.scope, _DTOR_ANNOTATIONS, "destructor")
 
     pm.add_dtor(p, 1, p[3], annotations, exceptions=p[6], abstract=p[7],
@@ -2185,15 +2183,12 @@ def p_enum_decl(p):
     if pm.skipping:
         return
 
-    # XXX
-    #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    w_enum = WrappedEnum()
 
-    annotations = p[4]
-    #pm.check_annotations(p, 4, annotations, _ENUM_ANNOTATIONS, "enum")
+    annotations = pm.validate_annotations(p[4], 'parse_enum_annotation',
+            w_enum, _ENUM_ANNOTATIONS, "enum")
 
-    pm.add_enum(p, 1, p[3], p[2], annotations, p[6])
+    pm.complete_enum(p, 1, w_enum, p[3], p[2], annotations, p[6])
 
 
 def p_opt_enum_key(p):
@@ -2245,7 +2240,7 @@ def p_enum_line(p):
         enum_member = WrappedEnumMember(cpp_name=cpp_name)
 
         annotations = pm.validate_annotations(p[3],
-                'parse_enum_member_annotations', enum_member,
+                'parse_enum_member_annotation', enum_member,
                 _ENUM_MEMBER_ANNOTATIONS, "enum member")
 
         enum_member.py_name = cached_name(pm.spec,
@@ -2295,7 +2290,7 @@ def p_exception(p):
 
     xd = pm.find_exception(p, 1, cpp_name, raise_code=raise_code)
 
-    annotations = pm.validate_annotations(p[4], 'parse_exception_annotations',
+    annotations = pm.validate_annotations(p[4], 'parse_exception_annotation',
             xd, _EXCEPTION_ANNOTATIONS, "exception")
 
     xd.py_name = pm.get_py_name(cpp_name.base_name, annotations)
@@ -2432,7 +2427,7 @@ def p_function_decl(p):
 
     # XXX
     #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
+    #        'parse_mapped_type_annotation', mapped_type,
     #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
 
     annotations = p[10]
@@ -2469,7 +2464,7 @@ def p_operator_decl(p):
         return
 
     # XXX
-    #annotations = pm.validate_annotations(p[3],
+    #annotations = pm.validate_annotation(p[3],
     #        'parse_mapped_type_annotations', mapped_type,
     #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
 
@@ -2528,7 +2523,7 @@ def p_operator_cast_decl(p):
 
     # XXX
     #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
+    #        'parse_mapped_type_annotation', mapped_type,
     #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
 
     annotations = p[10]
@@ -2641,7 +2636,7 @@ def p_arg_type(p):
 
     arg = p[1]
 
-    annotations = pm.validate_annotations(p[3], 'parse_argument_annotations',
+    annotations = pm.validate_annotations(p[3], 'parse_argument_annotation',
             arg, _ARGUMENT_ANNOTATIONS, "argument")
 
     if p[2] is not None:
@@ -3026,7 +3021,7 @@ def p_namespace_head(p):
     namespace = pm.new_class(p, 1, IfaceFileType.NAMESPACE,
             normalised_scoped_name(p[1], pm.scope))
 
-    annotations = pm.validate_annotations(p[2], 'parse_namespace_annotations',
+    annotations = pm.validate_annotations(p[2], 'parse_namespace_annotation',
             namespace, _NAMESPACE_ANNOTATIONS, "namespace")
 
     namespace.pyqt_no_qmetaobject = annotations.get('PyQtNoQMetaObject', False)
@@ -3085,7 +3080,7 @@ def p_typedef_decl(p):
     typedef = WrappedTypedef()
 
     annotations = pm.validate_annotations(p[annos_symbol],
-            'parse_typedef_annotations', typedef, _TYPEDEF_ANNOTATIONS,
+            'parse_typedef_annotation', typedef, _TYPEDEF_ANNOTATIONS,
             "typedef")
 
     pm.apply_type_annotations(p, annos_symbol, type, annotations)
@@ -3166,7 +3161,7 @@ def p_union_head(p):
     klass = pm.define_class(p, 1, ClassKey.UNION, p[1])
 
     # Return the annotations.
-    p[0] = pm.validate_annotations(p[2], 'parse_union_annotations', klass,
+    p[0] = pm.validate_annotations(p[2], 'parse_union_annotation', klass,
             _UNION_ANNOTATIONS, "union")
 
 
@@ -3206,7 +3201,7 @@ def p_variable(p):
 
     variable = WrappedVariable()
 
-    annotations = pm.validate_annotations(p[3], 'parse_variable_annotations',
+    annotations = pm.validate_annotations(p[3], 'parse_variable_annotation',
             variable, _VARIABLE_ANNOTATIONS, "variable")
 
     pm.apply_type_annotations(p, 3, type, annotations)

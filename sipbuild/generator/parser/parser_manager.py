@@ -19,7 +19,7 @@ from ..specification import (AccessSpecifier, Argument, ArgumentType,
         IfaceFile, IfaceFileType, KwArgs, MappedType, Member, Module, Overload,
         PyQtMethodSpecifier, PySlot, Qualifier, QualifierType, Signature,
         SourceLocation, Specification, Transfer, TypeHints, WrappedClass,
-        WrappedException, WrappedEnum)
+        WrappedException)
 from ..templates import encoded_template_name, same_template_signature
 from ..utils import (argument_as_str, cached_name, find_iface_file,
         normalised_scoped_name, same_base_type)
@@ -565,8 +565,10 @@ class ParserManager:
         if self.parsing_virtual or len(scope.dealloc_code) != 0:
             scope.needs_shadow = True
 
-    def add_enum(self, p, symbol, cpp_name, is_scoped, annotations, members):
-        """ Create a new enum and add it to the current scope. """
+    def complete_enum(self, p, symbol, w_enum, cpp_name, is_scoped,
+            annotations, members):
+        """ Complete the definition of an enum and add it to the current scope.
+        """
 
         if self.scope_access_specifier is AccessSpecifier.PRIVATE:
             self.parser_error(p, symbol, "class enums cannot be private")
@@ -614,9 +616,13 @@ class ParserManager:
                 cached_fq_cpp_name.used = True
                 py_name.used = True
 
-        w_enum = WrappedEnum(base_type, fq_cpp_name, self.module_state.module,
-                cached_fq_cpp_name=cached_fq_cpp_name, is_scoped=is_scoped,
-                py_name=py_name, scope=self.scope)
+        w_enum.base_type = base_type
+        w_enum.cached_fq_cpp_name = cached_fq_cpp_name
+        w_enum.fq_cpp_name = fq_cpp_name
+        w_enum.is_scoped = is_scoped
+        w_enum.module = self.module_state.module
+        w_enum.py_name = py_name
+        w_enum.scope = self.scope
 
         if self.scope_access_specifier is AccessSpecifier.PROTECTED:
             if not self.bindings.protected_is_public:

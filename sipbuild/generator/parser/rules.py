@@ -2043,13 +2043,8 @@ def p_dtor(p):
     if pm.skipping:
         return
 
-    # XXX
-    #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
-
-    annotations = p[8]
-    #pm.check_annotations(p, 8, annotations, _DTOR_ANNOTATIONS, "destructor")
+    annotations = pm.validate_annotations(p[8], 'parse_dtor_annotations',
+            pm.scope, _DTOR_ANNOTATIONS, "destructor")
 
     pm.add_dtor(p, 1, p[3], annotations, exceptions=p[6], abstract=p[7],
             premethod_code=p[10], method_code=p[11],

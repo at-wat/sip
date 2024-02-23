@@ -3199,7 +3199,6 @@ def p_variable(p):
 
     type = p[1]
     cpp_name = p[2]
-    annos_symbol = 3
     body = p[4]
 
     # We don't currently support /AllowNone/ and /DisallowNone/ for variables.
@@ -3211,26 +3210,23 @@ def p_variable(p):
     if len(type.derefs) != 0:
         type.disallow_none = True
 
-    # XXX
-    #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    variable = WrappedVariable()
 
-    annotations = p[annos_symbol]
+    annotations = pm.validate_annotations(p[3], 'parse_variable_annotations',
+            variable, _VARIABLE_ANNOTATIONS, "variable")
 
-    #pm.check_annotations(p, annos_symbol, annotations, _VARIABLE_ANNOTATIONS,
-    #        "variable")
-    pm.apply_type_annotations(p, annos_symbol, type, annotations)
+    pm.apply_type_annotations(p, 3, type, annotations)
 
-    py_name = cached_name(pm.spec, pm.get_py_name(cpp_name, p[3]))
+    py_name = cached_name(pm.spec, pm.get_py_name(cpp_name, annotations))
 
     if pm.in_main_module:
         py_name.used = True
 
-    fq_cpp_name = normalised_scoped_name(cpp_name, pm.scope)
-
-    variable = WrappedVariable(fq_cpp_name, pm.module_state.module, py_name,
-            pm.scope, type)
+    variable.fq_cpp_name = normalised_scoped_name(cpp_name, pm.scope)
+    variable.module = pm.module_state.module
+    variable.py_name = py_name
+    variable.scope = pm.scope
+    variable.type = type
 
     variable.no_setter = annotations.get('NoSetter', False)
     variable.no_type_hint = annotations.get('NoTypeHint', False)

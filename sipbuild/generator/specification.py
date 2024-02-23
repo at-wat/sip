@@ -1797,32 +1797,23 @@ class WrappedTypedef:
 
 
 @dataclass
-class WrappedVariable:
+class WrappedVariable(Extendable):
     """ Encapsulate a wrapped variable. """
-
-    # The fully qualified C++ name.
-    fq_cpp_name: ScopedName
-
-    # The defining module.
-    module: Module
-
-    # The Python name.
-    py_name: CachedName
-
-    # The enclosing scope.
-    scope: Optional[WrappedClass]
-
-    # The type.
-    type: Argument
 
     # The code specified by any %AccessCode directive.
     access_code: Optional[CodeBlock] = None
+
+    # The fully qualified C++ name.
+    fq_cpp_name: Optional[ScopedName] = None
 
     # The code specified by any %GetCode directive.
     get_code: Optional[CodeBlock] = None
 
     # Set if the variable is static.
     is_static: bool = False
+
+    # The defining module.
+    module: Optional[Module] = None
 
     # Set if the variable needs a handler. (resolver)
     needs_handler: bool = False
@@ -1833,5 +1824,14 @@ class WrappedVariable:
     # Set if the variable has no setter and will be read-only.
     no_setter: bool = False
 
+    # The Python name.
+    py_name: Optional[CachedName] = None
+
+    # The enclosing scope.
+    scope: Optional[WrappedClass] = None
+
     # The code specified by any %SetCode directive.
     set_code: Optional[CodeBlock] = None
+
+    # The type.
+    type: Optional[Argument] = None

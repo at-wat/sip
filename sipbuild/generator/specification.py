@@ -1614,7 +1614,6 @@ class WrappedClass(Extendable):
     py_name: Optional[CachedName] = None
 
     # The /PyQtFlags/.  PyQt5 only, remove in SIP v7.
-    # XXX
     pyqt_flags: int = 0
 
     # The /PyQtFlagsEnums/.  PyQt5 only, remove in SIP v7.
@@ -1622,7 +1621,6 @@ class WrappedClass(Extendable):
     pyqt_flags_enums: Optional[List[str]] = None
 
     # The /PyQtInterface/.  PyQt5 and PyQt6, remove in SIP v7.
-    # XXX
     pyqt_interface: Optional[str] = None
 
     # Set if /PyQtNoQMetaObject/ was specified.  PyQt5 and PyQt6, remove in SIP
@@ -1634,7 +1632,7 @@ class WrappedClass(Extendable):
     real_class: Optional['WrappedClass'] = None
 
     # The enclosing scope.
-    scope: Optional['WrappedClass']
+    scope: Optional['WrappedClass'] = None
 
     # The sub-class base class. (resolver)
     subclass_base: Optional['WrappedClass'] = None

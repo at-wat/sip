@@ -36,91 +36,63 @@ class BuildSystemExtension:
 
         return extension_data
 
-    def parse_boolean_annotation(self, name, annotations, location):
-        """ Parse and return the value of a boolean annotation or False if it
-        wasn't specified.
-        """
+    def parse_boolean_annotation(self, name, raw_value, location):
+        """ Parse and return the valid value of a boolean annotation. """
 
         from .parser import InvalidAnnotation, validate_boolean
 
-        try:
-            value = annotations.pop(name)
-        except KeyError:
-            return False
-
         pm, p, symbol = location
 
         try:
-            value = validate_boolean(pm, p, symbol, name, value)
+            value = validate_boolean(pm, p, symbol, name, raw_value)
         except InvalidAnnotation as e:
             pm.parser_error(p, symbol, str(e))
-            value = False
+            value = e.use
 
         return value
 
-    def parse_integer_annotation(self, name, annotations, location):
-        """ Parse and return the value of an integer annotation or 0 if it
-        wasn't specified.
-        """
+    def parse_integer_annotation(self, name, raw_value, location):
+        """ Parse and return the valid value of an integer annotation. """
 
         from .parser import InvalidAnnotation, validate_integer
 
-        try:
-            value = annotations.pop(name)
-        except KeyError:
-            return 0
-
         pm, p, symbol = location
 
         try:
-            value = validate_integer(pm, p, symbol, name, value)
+            value = validate_integer(pm, p, symbol, name, raw_value)
         except InvalidAnnotation as e:
             pm.parser_error(p, symbol, str(e))
-            value = 0
+            value = e.use
 
         return value
 
-    def parse_string_annotation(self, name, annotations, location):
-        """ Parse and return the value of a string annotation or None if it
-        wasn't specified.
-        """
+    def parse_string_annotation(self, name, raw_value, location):
+        """ Parse and return the valid value of a string annotation. """
 
         from .parser import InvalidAnnotation, validate_string
 
-        try:
-            value = annotations.pop(name)
-        except KeyError:
-            return None
-
         pm, p, symbol = location
 
         try:
-            value = validate_string(pm, p, symbol, name, value)
+            value = validate_string(pm, p, symbol, name, raw_value)
         except InvalidAnnotation as e:
             pm.parser_error(p, symbol, str(e))
-            value = None
+            value = e.use
 
         return value
 
-    def parse_string_list_annotation(self, name, annotations, location):
-        """ Parse and return the value of a string list annotation or None if
-        it wasn't specified.
-        """
+    def parse_string_list_annotation(self, name, raw_value, location):
+        """ Parse and return the valid value of a string list annotation. """
 
         from .parser import InvalidAnnotation, validate_string_list
-
-        try:
-            value = annotations.pop(name)
-        except KeyError:
-            return None
 
         pm, p, symbol = location
 
         try:
-            value = validate_string_list(pm, p, symbol, name, value)
+            value = validate_string_list(pm, p, symbol, name, raw_value)
         except InvalidAnnotation as e:
             pm.parser_error(p, symbol, str(e))
-            value = None
+            value = e.use
 
         return value
 
@@ -147,86 +119,65 @@ class BuildSystemExtension:
 
         pass
 
-    def parse_argument_annotations(self, extendable, annotations, location):
-        """ Parse any argument annotations.  Any annotations dealt with should
-        be removed from the dict.
-        """
+    def parse_argument_annotation(self, extendable, name, raw_value, location):
+        """ Parse an argument annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_class_annotations(self, extendable, annotations, location):
-        """ Parse any class annotations.  Any annotations dealt with should be
-        removed from the dict.
-        """
+    def parse_class_annotation(self, extendable, name, raw_value, location):
+        """ Parse a class annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_ctor_annotations(self, extendable, annotations, location):
-        """ Parse any ctor annotations.  Any annotations dealt with should be
-        removed from the dict.
-        """
+    def parse_ctor_annotation(self, extendable, name, raw_value, location):
+        """ Parse a ctor annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_dtor_annotations(self, extendable, annotations, location):
-        """ Parse any dtor annotations.  Any annotations dealt with should be
-        removed from the dict.
-        """
+    def parse_dtor_annotation(self, extendable, name, raw_value, location):
+        """ Parse a dtor annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_enum_annotations(self, extendable, annotations, location):
-        """ Parse any enum annotations.  Any annotations dealt with should be
-        removed from the dict.
-        """
+    def parse_enum_annotation(self, extendable, name, raw_value, location):
+        """ Parse an enum annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_enum_member_annotations(self, extendable, annotations, location):
-        """ Parse any enum_member annotations.  Any annotations dealt with
-        should be removed from the dict.
-        """
+    def parse_enum_member_annotation(self, extendable, name, raw_value,
+            location):
+        """ Parse an enum member annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_function_annotations(self, extendable, annotations, location):
-        """ Parse any function annotations.  Any annotations dealt with should
-        be removed from the dict.
-        """
+    def parse_function_annotation(self, extendable, name, raw_value, location):
+        """ Parse a function annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_mapped_type_annotations(self, extendable, annotations, location):
-        """ Parse any mapped type annotations.  Any annotations dealt with
-        should be removed from the dict.
-        """
+    def parse_mapped_type_annotation(self, extendable, name, raw_value,
+            location):
+        """ Parse a mapped type annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_namespace_annotations(self, extendable, annotations, location):
-        """ Parse any namespace annotations.  Any annotations dealt with should
-        be removed from the dict.
-        """
+    def parse_namespace_annotation(self, extendable, name, raw_value,
+            location):
+        """ Parse a namespace annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_typedef_annotations(self, extendable, annotations, location):
-        """ Parse any typedef annotations.  Any annotations dealt with should
-        be removed from the dict.
-        """
+    def parse_typedef_annotation(self, extendable, name, raw_value, location):
+        """ Parse a typedef annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_union_annotations(self, extendable, annotations, location):
-        """ Parse any union annotations.  Any annotations dealt with should be
-        removed from the dict.
-        """
+    def parse_union_annotation(self, extendable, name, raw_value, location):
+        """ Parse a union annotation.  Return True if it was parsed. """
 
         pass
 
-    def parse_variable_annotations(self, extendable, annotations, location):
-        """ Parse any variable annotations.  Any annotations dealt with should
-        be removed from the dict.
-        """
+    def parse_variable_annotation(self, extendable, name, raw_value, location):
+        """ Parse a variable annotation.  Return True if it was parsed. """
 
         pass

@@ -987,18 +987,6 @@ class ParserManager:
             else:
                 type.type = self.convert_encoding(p, symbol, encoding)
 
-    def check_annotations(self, p, symbol, annotations, valid_annotations,
-            context):
-        """ Check that all the annotations provided as a dict of name/values
-        are valid in a given context.
-        """
-
-        for name in annotations:
-            if name not in valid_annotations:
-                self.parser_error(p, symbol,
-                        "{0} is not a valid {1} annotation".format(name,
-                                context))
-
     def check_attributes(self, p, symbol, py_name, is_function=False,
             ignore=None):
         """ Check that a Python name will not clash with another object in the
@@ -1693,19 +1681,34 @@ class ParserManager:
 
         return self.skip_stack[-1]
 
-    def validate_annotation(self, p, symbol, value):
-        """ Validate an annotation and its value and return a valid version of
-        the value.
+    def validate_annotations(self, raw_annotations, extension_method,
+            extendable, builtin_annotations, context):
+        """ Validate a list of raw annotations, allow any build system
+        extensions to handle their own annotations and return a dict of builtin
+        nnotations and their validated values.
         """
 
-        try:
-            value = validate_annotation_value(self, p, symbol, p[symbol],
-                    value)
-        except InvalidAnnotation as e:
-            self.parser_error(p, symbol, str(e))
-            value = e.use
+        annotations = {}
 
-        return value
+        for p, symbol, value in raw_annotations:
+            name = p[symbol]
+
+            if self.bindings.project.call_build_system_extensions(extension_method, extendable, name, value, (self, p, symbol)):
+                continue
+
+            if name not in builtin_annotations:
+                self.parser_error(p, symbol,
+                        "{0} is not a valid {1} annotation".format(name,
+                                context))
+
+            try:
+                annotations[name] = validate_annotation_value(self, p, symbol,
+                        name, value)
+            except InvalidAnnotation as e:
+                self.parser_error(p, symbol, str(e))
+                value = e.use
+
+        return annotations
 
     def validate_function(self, p, symbol, overload):
         """ Validate a completed function. """

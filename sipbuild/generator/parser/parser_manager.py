@@ -19,7 +19,7 @@ from ..specification import (AccessSpecifier, Argument, ArgumentType,
         IfaceFile, IfaceFileType, KwArgs, MappedType, Member, Module, Overload,
         PyQtMethodSpecifier, PySlot, Qualifier, QualifierType, Signature,
         SourceLocation, Specification, Transfer, TypeHints, WrappedClass,
-        WrappedException, WrappedEnum, WrappedEnumMember)
+        WrappedException, WrappedEnum)
 from ..templates import encoded_template_name, same_template_signature
 from ..utils import (argument_as_str, cached_name, find_iface_file,
         normalised_scoped_name, same_base_type)
@@ -627,16 +627,16 @@ class ParserManager:
         w_enum.no_type_hint = annotations.get('NoTypeHint', False)
 
         # Create the members.
-        for m_cpp_name, m_py_name, m_no_type_hint in members:
+        for member in members:
             if not is_scoped:
-                self.check_attributes(p, symbol, m_py_name.name)
-
-            w_enum.members.append(
-                    WrappedEnumMember(m_cpp_name, m_py_name, w_enum,
-                            no_type_hint=m_no_type_hint))
+                self.check_attributes(p, symbol, member.py_name.name)
 
             if self.in_main_module:
-                m_py_name.used = True
+                member.py_name.used = True
+
+            member.scope = w_enum
+
+            w_enum.members.append(member)
 
         self.spec.enums.insert(0, w_enum)
 

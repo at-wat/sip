@@ -9,7 +9,8 @@ from ..specification import (AccessSpecifier, Argument, ArgumentType,
         FunctionCall, IfaceFile, IfaceFileType, KwArgs, License, MappedType,
         MappedTypeTemplate, Overload, Property, PyQtMethodSpecifier,
         QualifierType, Signature, Template, ThrowArguments, Value, ValueType,
-        VirtualErrorHandler, WrappedTypedef, WrappedVariable)
+        VirtualErrorHandler, WrappedEnumMember, WrappedTypedef,
+        WrappedVariable)
 from ..templates import same_template_signature
 from ..utils import cached_name, normalised_scoped_name, search_typedefs
 
@@ -2239,17 +2240,19 @@ def p_enum_line(p):
         return
 
     if len(p) == 5:
-        # XXX
-        #annotations = pm.validate_annotations(p[3],
-        #        'parse_mapped_type_annotations', mapped_type,
-        #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+        cpp_name = p[1]
 
-        annotations = p[3]
-        #pm.check_annotations(p, 3, annotations, _ENUM_MEMBER_ANNOTATIONS,
-        #        "enum member")
+        enum_member = WrappedEnumMember(cpp_name=cpp_name)
 
-        p[0] = (p[1], cached_name(pm.spec, pm.get_py_name(p[1], p[3])),
-                p[3].get('NoTypeHint', False))
+        annotations = pm.validate_annotations(p[3],
+                'parse_enum_member_annotations', enum_member,
+                _ENUM_MEMBER_ANNOTATIONS, "enum member")
+
+        enum_member.py_name = cached_name(pm.spec,
+                pm.get_py_name(cpp_name, annotations))
+        enum_member.no_type_hint = annotations.get('NoTypeHint', False)
+
+        p[0] = enum_member
     else:
         p[0] = None
 

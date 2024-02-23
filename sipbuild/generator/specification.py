@@ -1728,20 +1728,20 @@ class WrappedEnum:
 
 
 @dataclass
-class WrappedEnumMember:
+class WrappedEnumMember(Extendable):
     """ Encapsulate a member of a wrapped enum. """
 
     # The C++ name.
-    cpp_name: str
-
-    # The Python name.
-    py_name: CachedName
-
-    # The enclosing enum.
-    scope: 'WrappedEnum'
+    cpp_name: Optional[str] = None
 
     # Set if the type hint should be suppressed.
     no_type_hint: bool = False
+
+    # The Python name.
+    py_name: Optional[CachedName] = None
+
+    # The enclosing enum.
+    scope: Optional['WrappedEnum'] = None
 
 
 @dataclass

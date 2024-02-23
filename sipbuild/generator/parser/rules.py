@@ -2288,45 +2288,38 @@ def p_exception(p):
 
     pm.cpp_only(p, 1, "%Exception")
 
-    # XXX
-    #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
-
-    annotations = p[4]
-    #pm.check_annotations(p, 4, annotations, _EXCEPTION_ANNOTATIONS,
-    #        "exception")
-
-    cpp_name = p[2]
-    py_name = pm.get_py_name(cpp_name.base_name, annotations)
-    pm.check_attributes(p, 2, py_name)
-
-    builtin_base, defined_base = p[3]
     raise_code = p[6].get('%RaiseCode')
-    type_header_code = p[6].get('%TypeHeaderCode')
-
     if raise_code is None:
         pm.parser_error(p, 1,
                 "%Exception must have a %RaiseCode sub-directive")
 
+    cpp_name = p[2]
+
     xd = pm.find_exception(p, 1, cpp_name, raise_code=raise_code)
 
-    module = pm.module_state.module
+    annotations = pm.validate_annotations(p[4], 'parse_exception_annotations',
+            xd, _EXCEPTION_ANNOTATIONS, "exception")
+
+    xd.py_name = pm.get_py_name(cpp_name.base_name, annotations)
+    pm.check_attributes(p, 2, xd.py_name)
 
     if xd.iface_file.module is not None:
         pm.parser_error(p, 2,
                 "an %Exception with this name has already been defined")
 
-    xd.iface_file.module = module
+    xd.iface_file.module = pm.module_state.module
 
+    type_header_code = p[6].get('%TypeHeaderCode')
     if type_header_code is not None:
         xd.iface_file.type_header_code.append(type_header_code)
 
+    builtin_base, defined_base = p[3]
     xd.builtin_base_exception = builtin_base
     xd.defined_base_exception = defined_base
-    xd.py_name = py_name
 
     if p[4].get('Default'):
+        module = xd.iface_file.module
+
         if module.default_exception is None:
             module.default_exception = xd
         else:

@@ -1745,14 +1745,8 @@ class WrappedEnumMember:
 
 
 @dataclass
-class WrappedException:
+class WrappedException(Extendable):
     """ Encapsulate a wrapped exception. """
-
-    # The interface file.
-    iface_file: IfaceFile
-
-    # The code specified by the %RaiseCode directive.
-    raise_code: CodeBlock
 
     # The base exception if it is a builtin.
     builtin_base_exception: Optional[str] = None
@@ -1768,12 +1762,18 @@ class WrappedException:
     # required. (resolver)
     exception_nr: int = -1
 
+    # The interface file.
+    iface_file: Optional[IfaceFile] = None
+
     # Set if this exception is needed by the module for which code is to be
     # generated. (resolver)
     needed: bool = False
 
     # The Python name.
     py_name: Optional[str] = None
+
+    # The code specified by the %RaiseCode directive.
+    raise_code: Optional[CodeBlock] = None
 
 
 @dataclass

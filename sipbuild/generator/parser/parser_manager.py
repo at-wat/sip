@@ -334,8 +334,8 @@ class ParserManager:
             class_exception = self._find_class_with_iface_file(iface_file)
 
         # Create a new one.
-        w_exception = WrappedException(iface_file, raise_code,
-                class_exception=class_exception)
+        w_exception = WrappedException(class_exception=class_exception,
+                iface_file=iface_file, raise_code=raise_code)
 
         self.spec.exceptions.append(w_exception)
 

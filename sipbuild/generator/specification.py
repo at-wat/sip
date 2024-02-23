@@ -1777,23 +1777,23 @@ class WrappedException:
 
 
 @dataclass
-class WrappedTypedef:
+class WrappedTypedef(Extendable):
     """ Encapsulate a wrapped typedef. """
 
     # The fully qualified C++ name.
-    fq_cpp_name: ScopedName
+    fq_cpp_name: Optional[ScopedName] = None
 
     # The defining module.
-    module: Module
-
-    # The enclosing scope.
-    scope: Optional[WrappedClass]
-
-    # The type.
-    type: Argument
+    module: Optional[Module] = None
 
     # Set if the typedef name should not be used in the generated code.
     no_type_name: bool = False
+
+    # The enclosing scope.
+    scope: Optional[WrappedClass] = None
+
+    # The type.
+    type: Optional[Argument] = None
 
 
 @dataclass

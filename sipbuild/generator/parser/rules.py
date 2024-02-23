@@ -3088,26 +3088,27 @@ def p_typedef_decl(p):
         docstring = p[12]
 
     cpp_name = p[name_symbol]
-    fq_cpp_name = normalised_scoped_name(ScopedName(cpp_name), pm.scope)
 
-    # XXX
-    #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    # Assume we are defining a typedef rather than instantiating a class
+    # template so that we can process the annotations.
+    typedef = WrappedTypedef()
 
-    annotations = p[annos_symbol]
+    annotations = pm.validate_annotations(p[annos_symbol],
+            'parse_typedef_annotations', typedef, _TYPEDEF_ANNOTATIONS,
+            "typedef")
 
-    #pm.check_annotations(p, annos_symbol, annotations, _TYPEDEF_ANNOTATIONS,
-    #        "typedef")
     pm.apply_type_annotations(p, annos_symbol, type, annotations)
 
-    no_type_name = annotations.get('NoTypeName', False)
+    typedef.no_type_name = annotations.get('NoTypeName', False)
+    typedef.fq_cpp_name = normalised_scoped_name(ScopedName(cpp_name),
+            pm.scope)
 
     # See if we are instantiating a class template.
     if type.type is ArgumentType.TEMPLATE:
         instantiated = pm.instantiate_class_template(p, name_symbol,
-                fq_cpp_name, type.definition,
-                pm.get_py_name(cpp_name, annotations), no_type_name, docstring)
+                typedef.fq_cpp_name, type.definition,
+                pm.get_py_name(cpp_name, annotations),
+                typedef.no_type_name, docstring)
 
         if instantiated:
             return
@@ -3122,9 +3123,11 @@ def p_typedef_decl(p):
             pm.parser_error(p, annos_symbol,
                     "/Capsule/ can only be specified for a void* type")
 
-    pm.add_typedef(p, name_symbol,
-            WrappedTypedef(fq_cpp_name, pm.module_state.module, pm.scope, type,
-                    no_type_name=no_type_name))
+    typedef.module = pm.module_state.module
+    typedef.scope = pm.scope
+    typedef.type = type
+
+    pm.add_typedef(p, name_symbol,typedef)
 
 
 # C/C++ unions. ###############################################################

@@ -2550,9 +2550,8 @@ def _convert_to_definitions(sf, spec, scope):
     if convert_to_type_code is None:
         return
 
-    scope_type = Argument(
-            ArgumentType.CLASS if isinstance(scope, WrappedClass) else ArgumentType.MAPPED,
-            definition=scope)
+    arg_type = ArgumentType.CLASS if isinstance(scope, WrappedClass) else ArgumentType.MAPPED
+    scope_type = Argument(type=arg_type, definition=scope)
 
     # Sometimes type convertors are just stubs that set the error flag, so
     # check if we actually need everything so that we can avoid compiler
@@ -6626,8 +6625,8 @@ def _function_body(sf, spec, bindings, scope, overload, original_klass=None,
             py_signature.args.append(py_signature.args[0])
 
             # Insert self in the right place.
-            py_signature.args[0] = Argument(ArgumentType.CLASS, is_in=True,
-                    is_reference=True, definition=original_klass)
+            py_signature.args[0] = Argument(type=ArgumentType.CLASS,
+                    is_in=True, is_reference=True, definition=original_klass)
 
             py_signature_adjusted = True
 

@@ -156,9 +156,9 @@ class ParserManager:
 
             # Provide a default ctor if required.
             if len(klass.ctors) == 0 and not klass.no_default_ctors:
-                signature = Signature(result=Argument(ArgumentType.VOID))
-                ctor = Constructor(AccessSpecifier.PUBLIC,
-                        py_signature=signature, cpp_signature=signature)
+                signature = Signature(result=Argument(type=ArgumentType.VOID))
+                ctor = Constructor(access_specifier=AccessSpecifier.PUBLIC,
+                        cpp_signature=signature, py_signature=signature)
 
                 klass.default_ctor = ctor
                 klass.ctors.append(ctor)
@@ -460,7 +460,7 @@ class ParserManager:
         # Handle the signatures allowing it to be used like a function
         # signature.
         ctor.py_signature = Signature(args=arg_list,
-                result=Argument(ArgumentType.VOID))
+                result=Argument(type=ArgumentType.VOID))
         self._check_ellipsis(p, symbol, ctor.py_signature)
 
         # Configure the constructor.
@@ -792,7 +792,8 @@ class ParserManager:
                 # does too much (ie. setting sipRes).
                 self.scope.len_cpp_name = cpp_name
 
-            len_py_signature = Signature(result=Argument(ArgumentType.SSIZE))
+            len_py_signature = Signature(
+                    result=Argument(type=ArgumentType.SSIZE))
 
             self._add_auto_slot(p, symbol, annotations, '__len__',
                     len_py_signature, len_py_signature, len_method_code)

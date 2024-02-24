@@ -1550,11 +1550,11 @@ def p_base_type(p):
     pm = p.parser.pm
 
     if isinstance(p[1], ArgumentType):
-        p[0] = Argument(p[1])
+        p[0] = Argument(type=p[1])
     elif len(p) == 2:
         # Resolve it if it is the name of a typedef.  This is done early as a
         # workaround for allowing /PyInt/ to be applied to typedef'ed types.
-        ad = Argument(ArgumentType.DEFINED, definition=p[1])
+        ad = Argument(type=ArgumentType.DEFINED, definition=p[1])
 
         while ad.type is ArgumentType.DEFINED:
             ad.type = ArgumentType.NONE
@@ -1563,7 +1563,7 @@ def p_base_type(p):
             # Don't resolve to a template type as it may be superceded later on
             # by a more specific mapped type.
             if ad.type in (ArgumentType.NONE, ArgumentType.TEMPLATE):
-                ad = Argument(ArgumentType.DEFINED, definition=p[1])
+                ad = Argument(type=ArgumentType.DEFINED, definition=p[1])
                 break
 
         p[0] = ad
@@ -1576,9 +1576,9 @@ def p_base_type(p):
         else:
             type = ArgumentType.UNION
 
-        p[0] = Argument(type, definition=p[2])
+        p[0] = Argument(type=type, definition=p[2])
     else:
-        p[0] = Argument(ArgumentType.TEMPLATE,
+        p[0] = Argument(type=ArgumentType.TEMPLATE,
                 definition=Template(p[1], Signature(args=p[3])))
 
     p[0].source_location = pm.get_source_location(p, 1)
@@ -1863,7 +1863,7 @@ def p_superclass(p):
     # This is a hack to allow typedef'ed classes to be used before we have
     # resolved the typedef definitions.  Unlike elsewhere, we require that the
     # typedef is defined before being used.
-    ad = Argument(ArgumentType.DEFINED, definition=p[2])
+    ad = Argument(type=ArgumentType.DEFINED, definition=p[2])
 
     while ad.type is ArgumentType.DEFINED:
         ad.type = ArgumentType.NONE

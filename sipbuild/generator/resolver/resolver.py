@@ -384,13 +384,13 @@ def _move_class_casts(spec, klass, error_log):
         dst_klass = cast.definition
 
         # Create the new ctor.
-        arg = Argument(ArgumentType.CLASS, definition=klass,
+        arg = Argument(type=ArgumentType.CLASS, definition=klass,
                 derefs=list(cast.derefs), is_reference=cast.is_reference,
                 is_const=cast.is_const, is_in=True,
                 source_location=cast.source_location)
         signature = Signature(args=[arg])
-        ctor = Constructor(AccessSpecifier.PUBLIC, py_signature=signature,
-                cpp_signature=signature, is_cast=True)
+        ctor = Constructor(access_specifier=AccessSpecifier.PUBLIC,
+                cpp_signature=signature, is_cast=True, py_signature=signature)
 
         # If the destination class is in a different module then use a proxy.
         if dst_klass.iface_file.module is not spec.module:
@@ -867,12 +867,12 @@ def _add_default_copy_ctor(klass):
         break
  
     # Create a default public copy ctor.
-    arg = Argument(ArgumentType.CLASS, definition=klass, is_reference=True,
-            is_const=True, is_in=True)
-    result = Argument(ArgumentType.VOID)
+    arg = Argument(type=ArgumentType.CLASS, definition=klass,
+            is_reference=True, is_const=True, is_in=True)
+    result = Argument(type=ArgumentType.VOID)
     signature = Signature(args=[arg], result=result)
-    ctor = Constructor(AccessSpecifier.PUBLIC, py_signature=signature,
-            cpp_signature=signature)
+    ctor = Constructor(access_specifier=AccessSpecifier.PUBLIC,
+            cpp_signature=signature, py_signature=signature)
  
     if klass.deprecated:
         ctor.deprecated = True
@@ -2107,7 +2107,7 @@ def _create_sorted_numbered_types(spec, mod, error_log):
 
         if mod is spec.module or klass.iface_file.needed:
             if not klass.is_hidden_namespace:
-                mod.needed_types.append(Argument(ArgumentType.CLASS,
+                mod.needed_types.append(Argument(type=ArgumentType.CLASS,
                         definition=klass, name=klass.iface_file.cpp_name))
 
     for mapped_type in spec.mapped_types:
@@ -2115,7 +2115,7 @@ def _create_sorted_numbered_types(spec, mod, error_log):
             continue
 
         if mod is spec.module or mapped_type.iface_file.needed:
-            mod.needed_types.append(Argument(ArgumentType.MAPPED,
+            mod.needed_types.append(Argument(type=ArgumentType.MAPPED,
                     definition=mapped_type, name=mapped_type.cpp_name))
 
     for enum in spec.enums:
@@ -2126,7 +2126,7 @@ def _create_sorted_numbered_types(spec, mod, error_log):
             continue
 
         if mod is spec.module or enum.needed:
-            mod.needed_types.append(Argument(ArgumentType.ENUM,
+            mod.needed_types.append(Argument(type=ArgumentType.ENUM,
                     definition=enum, name=enum.cached_fq_cpp_name))
 
     # Sort the list and assign type numbers.

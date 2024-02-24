@@ -575,11 +575,8 @@ class Extendable:
 
 
 @dataclass
-class Argument:
+class Argument(Extendable):
     """ Encapsulate a callable argument (or return value or variable type). """
-
-    # The type.
-    type: ArgumentType
 
     # Set if /AllowNone/ was specified.
     allow_none: bool = False
@@ -641,6 +638,9 @@ class Argument:
 
     # Any transfer of ownership.
     transfer: Transfer = Transfer.NONE
+
+    # The type.
+    type: Optional[ArgumentType] = None
 
     # The non-default type hints.
     type_hints: Optional['TypeHints'] = None

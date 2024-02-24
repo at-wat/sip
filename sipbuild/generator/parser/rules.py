@@ -990,22 +990,16 @@ def p_mapped_type_function(p):
     if pm.skipping:
         return
 
-    # XXX
-    #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotation', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    overload = Overload(cpp_signature=p[10], docstring=p[12], is_const=p[7],
+            is_static=True, method_code=p[14], premethod_code=p[13],
+            throw_args=p[8])
 
-    annotations = p[9]
-    #pm.check_annotations(p, 9, annotations, _FUNCTION_ANNOTATIONS, "function")
+    annotations = pm.validate_annotations(p[9], 'parse_function_annotation',
+            overload, _FUNCTION_ANNOTATIONS, "function")
+
     pm.apply_type_annotations(p, 9, p[2], annotations)
-
-    overload = pm.add_function(p, 1, p[3], p[2], p[5], annotations, const=p[7],
-            exceptions=p[8], cpp_signature=p[10], docstring=p[12],
-            premethod_code=p[13], method_code=p[14])
-
-    overload.is_static = True
-
-    pm.validate_function(p, 1, overload)
+    pm.complete_overload(p, 1, overload, p[3], p[2], p[5], annotations)
+    pm.validate_overload(p, 1, overload)
 
 
 # %ModuleHeaderCode ###########################################################
@@ -2068,7 +2062,7 @@ def p_method_variable(p):
         item = p[1]
 
     if isinstance(item, Overload):
-        pm.validate_function(p, 1, item)
+        pm.validate_overload(p, 1, item)
 
 
 def p_simple_method_variable(p):
@@ -2422,19 +2416,16 @@ def p_function_decl(p):
     if pm.skipping:
         return
 
-    # XXX
-    #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotation', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    overload = Overload(cpp_signature=p[11], docstring=p[13], is_abstract=p[9],
+            is_const=p[6], is_final=p[7], method_code=p[15],
+            premethod_code=p[14], throw_args=p[8], virtual_catcher_code=p[16],
+            virtual_call_code=p[17])
 
-    annotations = p[10]
-    #pm.check_annotations(p, 10, annotations, _FUNCTION_ANNOTATIONS, "function")
+    annotations = pm.validate_annotations(p[10], 'parse_function_annotation',
+            overload, _FUNCTION_ANNOTATIONS, "function")
+
     pm.apply_type_annotations(p, 10, p[1], annotations)
-
-    p[0] = pm.add_function(p, 1, p[2], p[1], p[4], annotations, const=p[6],
-            final=p[7], exceptions=p[8], abstract=p[9], cpp_signature=p[11],
-            docstring=p[13], premethod_code=p[14], method_code=p[15],
-            virtual_catcher_code=p[16], virtual_call_code=p[17])
+    p[0] = pm.complete_overload(p, 1, overload, p[2], p[1], p[4], annotations)
 
 
 def p_assignment_operator_decl(p):
@@ -2460,13 +2451,14 @@ def p_operator_decl(p):
     if pm.skipping:
         return
 
-    # XXX
-    #annotations = pm.validate_annotation(p[3],
-    #        'parse_mapped_type_annotations', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    overload = Overload(cpp_signature=p[12], is_abstract=p[10], is_const=p[7],
+            is_final=p[8], method_code=p[15], premethod_code=p[14],
+            throw_args=p[9], virtual_catcher_code=p[16],
+            virtual_call_code=p[17])
 
-    annotations = p[11]
-    #pm.check_annotations(p, 11, annotations, _FUNCTION_ANNOTATIONS, "function")
+    annotations = pm.validate_annotations(p[11], 'parse_function_annotation',
+            overload, _FUNCTION_ANNOTATIONS, "function")
+
     pm.apply_type_annotations(p, 11, p[1], annotations)
 
     scope = pm.scope
@@ -2478,10 +2470,9 @@ def p_operator_decl(p):
         elif p[3] == '__sub__':
             p[3] = '__neg__'
 
-    p[0] = pm.add_function(p, 1, p[3], p[1], p[5], p[11], const=p[7],
-            final=p[8], exceptions=p[9], abstract=p[10], cpp_signature=p[12],
-            premethod_code=p[14], method_code=p[15],
-            virtual_catcher_code=p[16], virtual_call_code=p[17])
+    pm.complete_overload(p, 1, overload, p[3], p[1], p[5], annotations)
+
+    p[0] = overload
 
 
 # Types that can be cast to a Python int.
@@ -2518,13 +2509,14 @@ def p_operator_cast_decl(p):
     if pm.skipping:
         return
 
-    # XXX
-    #annotations = pm.validate_annotations(p[3],
-    #        'parse_mapped_type_annotation', mapped_type,
-    #        _MAPPED_TYPE_ANNOTATIONS, "mapped type")
+    overload = Overload(cpp_signature=p[11], is_abstract=p[9], is_const=p[6],
+            is_final=p[7], method_code=p[14], premethod_code=p[13],
+            throw_args=p[8], virtual_catcher_code=p[15],
+            virtual_call_code=p[16])
 
-    annotations = p[10]
-    #pm.check_annotations(p, 10, annotations, _FUNCTION_ANNOTATIONS, "function")
+    annotations = pm.validate_annotations(p[10], 'parse_function_annotation',
+            overload, _FUNCTION_ANNOTATIONS, "function")
+
     pm.apply_type_annotations(p, 10, p[2], annotations)
 
     if pm.scope is None:
@@ -2555,10 +2547,10 @@ def p_operator_cast_decl(p):
         else:
             pm.scope.casts.insert(0, cpp_type)
     else:
-        p[0] = pm.add_function(p, 1, slot_name, p[2], p[4], annotations,
-                const=p[6], final=p[7], exceptions=p[8], abstract=p[9],
-                cpp_signature=p[11], premethod_code=p[13], method_code=p[14],
-                virtual_catcher_code=p[15], virtual_call_code=p[16])
+        pm.complete_overload(p, 1, overload, slot_name, p[2], p[4],
+                annotations)
+
+        p[0] = overload
 
 
 def p_opt_arg_list(p):
@@ -3257,6 +3249,28 @@ def p_variable_body_directive(p):
 
 # Annotations. ################################################################
 
+class Production:
+    """ ply reuses production objects so this class implements the same API
+    that is related to a token's location so that it can be passed around.
+    """
+
+    def __init__(self, p, symbol):
+        """ Initialise the object. """
+
+        self._lineno = p.lineno(symbol)
+        self._lexpos = p.lexpos(symbol)
+
+    def lineno(self, symbol):
+        """ Return the line number. """
+
+        return self._lineno
+
+    def lexpos(self, symbol):
+        """ Return the lexical position. """
+
+        return self._lexpos
+
+
 def p_opt_annos(p):
     """opt_annos : '/' annotations '/'
         | empty"""
@@ -3279,7 +3293,7 @@ def p_annotation(p):
         | NAME '=' annotation_value"""
 
     value = None if len(p) == 2 else p[3]
-    p[0] = [(p, 1, value)]
+    p[0] = [(Production(p, 1), 1, p[1], value)]
 
 
 def p_annotation_value(p):

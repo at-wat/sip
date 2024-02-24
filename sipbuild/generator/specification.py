@@ -1060,29 +1060,26 @@ class Module:
 
 
 @dataclass
-class Overload:
+class Overload(Extendable):
     """ Encapsulate an overloaded member function. """
-
-    # The access specifier.
-    access_specifier: Optional[AccessSpecifier]
-
-    # The member common to all overloads.
-    common: Member
-
-    # The C/C++ name if not a operator/slot.
-    cpp_name: str
-
-    # The C/C++ signature.
-    cpp_signature: 'Signature'
-
-    # The Python signature.
-    py_signature: 'Signature'
 
     # Set if /AbortOnException/ is specified.
     abort_on_exception: bool = False
 
     # Set if the overload is really protected.
     access_is_really_protected: bool = False
+
+    # The access specifier.
+    access_specifier: Optional[AccessSpecifier] = None
+
+    # The member common to all overloads.
+    common: Optional[Member] = None
+
+    # The C/C++ name if not a operator/slot.
+    cpp_name: Optional[str] = None
+
+    # The C/C++ signature.
+    cpp_signature: Optional['Signature'] = None
 
     # Set if /Deprecated/ was specified.
     deprecated: bool = False
@@ -1155,6 +1152,9 @@ class Overload:
 
     # The code specified by any %PreMethodCode directive.
     premethod_code: Optional[CodeBlock] = None
+
+    # The Python signature.
+    py_signature: Optional['Signature'] = None
 
     # The PyQt method specifier.
     # XXX

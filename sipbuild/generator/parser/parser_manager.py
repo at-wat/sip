@@ -477,7 +477,7 @@ class ParserManager:
         elif ctor.cpp_signature is None:
             ctor.cpp_signature = ctor.py_signature
         else:
-            self._check_ellipsis(p, symbol, cpp.cpp_signature)
+            self._check_ellipsis(p, symbol, ctor.cpp_signature)
 
         if annotations.get("Default", False):
             if scope.default_ctor is None:
@@ -642,12 +642,11 @@ class ParserManager:
 
         self.spec.enums.insert(0, w_enum)
 
-    def add_function(self, p, symbol, cpp_name, result, arg_list, annotations,
-            *, const=False, final=False, exceptions=None, abstract=False,
-            cpp_signature=None, docstring=None, premethod_code=None,
-            method_code=None, virtual_catcher_code=None,
-            virtual_call_code=None):
-        """ Create and return an Overload and add it to the current scope. """
+    def complete_overload(self, p, symbol, overload, cpp_name, result,
+            arg_list, annotations):
+        """ Complete the definition of an Overload and add it to the current
+        scope.
+        """
 
         # Get the Python name.
         py_name = self.get_py_name(cpp_name, annotations)
@@ -656,19 +655,21 @@ class ParserManager:
         py_signature = Signature(args=arg_list, result=result)
         self._check_ellipsis(p, symbol, py_signature)
 
-        if cpp_signature is None:
-            cpp_signature = py_signature
+        if overload.cpp_signature is None:
+            overload.cpp_signature = py_signature
         else:
-            self._check_ellipsis(p, symbol, cpp_signature)
+            self._check_ellipsis(p, symbol, overload.cpp_signature)
 
         # Find (or create) the member shared by overloads with the same Python
         # name.
         member = self._find_member(p, symbol, py_name, arg_list, annotations,
-                method_code)
+                overload.method_code)
 
-        # Create the overload.
-        overload = Overload(self.scope_access_specifier, member, cpp_name,
-                cpp_signature, py_signature)
+        # Configure the overload.
+        overload.access_specifier = self.scope_access_specifier
+        overload.common = member
+        overload.cpp_name = cpp_name
+        overload.py_signature = py_signature
 
         for m in self.module_state.module.global_functions:
             if m is member:
@@ -691,15 +692,7 @@ class ParserManager:
             if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
                 self.scope.needs_shadow = True
 
-        overload.docstring = docstring
-        overload.is_abstract = abstract
-        overload.is_const = const
         overload.is_delattr = (py_name == '__delattr__')
-        overload.is_final = final
-        overload.premethod_code = premethod_code
-        overload.throw_args = exceptions
-        overload.virtual_call_code = virtual_call_code
-        overload.virtual_catcher_code = virtual_catcher_code
         overload.source_location = self.get_source_location(p, symbol)
 
         # See if the function is a non-lazy method.  These are methods that
@@ -763,7 +756,7 @@ class ParserManager:
         overload.posthook = annotations.get('PostHook')
         overload.prehook = annotations.get('PreHook')
 
-        if method_code is None and annotations.get('NoRaisesPyException') is None:
+        if overload.method_code is None and annotations.get('NoRaisesPyException') is None:
             if self.module_state.all_raise_py_exception or annotations.get('RaisesPyException', False):
                 overload.raises_py_exception = True
 
@@ -788,11 +781,9 @@ class ParserManager:
         self.apply_common_argument_annotations(p, symbol,
                 overload.py_signature.result, annotations)
 
-        overload.method_code = method_code
-
         # Add some auto-generated slots if required.
         if '__len__' in annotations:
-            len_method_code = method_code
+            len_method_code = overload.method_code
             if len_method_code is None:
                 len_method_code = CodeBlock("Auto-generated",
                         text='            sipRes = (Py_ssize_t)sipCpp->{0}();\n'.format(cpp_name))
@@ -808,13 +799,11 @@ class ParserManager:
 
         if '__matmul__' in annotations:
             self._add_auto_slot(p, symbol, annotations, '__matmul__',
-                    py_signature, cpp_signature, method_code)
+                    py_signature, overload.cpp_signature, overload.method_code)
 
         if '__imatmul__' in annotations:
             self._add_auto_slot(p, symbol, annotations, '__imatmul__',
-                    py_signature, cpp_signature, method_code)
-
-        return overload
+                    py_signature, overload.cpp_signature, overload.method_code)
 
     def add_mapped_type(self, p, symbol, mapped_type, cpp_type, annotations):
         """ Complete the implementation of a mapped type and add it to the
@@ -1687,15 +1676,13 @@ class ParserManager:
             extendable, builtin_annotations, context):
         """ Validate a list of raw annotations, allow any build system
         extensions to handle their own annotations and return a dict of builtin
-        nnotations and their validated values.
+        annotations and their validated values.
         """
 
         annotations = {}
 
-        for p, symbol, value in raw_annotations:
-            name = p[symbol]
-
-            if self.bindings.project.call_build_system_extensions(extension_method, extendable, name, value, (self, p, symbol)):
+        for p, symbol, name, raw_value in raw_annotations:
+            if self.bindings.project.call_build_system_extensions(extension_method, extendable, name, raw_value, (self, p, symbol)):
                 continue
 
             if name not in builtin_annotations:
@@ -1704,16 +1691,18 @@ class ParserManager:
                                 context))
 
             try:
-                annotations[name] = validate_annotation_value(self, p, symbol,
-                        name, value)
+                value = validate_annotation_value(self, p, symbol, name,
+                        raw_value)
             except InvalidAnnotation as e:
                 self.parser_error(p, symbol, str(e))
                 value = e.use
 
+            annotations[name] = value
+
         return annotations
 
-    def validate_function(self, p, symbol, overload):
-        """ Validate a completed function. """
+    def validate_overload(self, p, symbol, overload):
+        """ Validate a completed overload. """
 
         # Shortcuts.
         cpp_only = partial(self.cpp_only, p, symbol)
@@ -1840,8 +1829,9 @@ class ParserManager:
         member = self._find_member(p, symbol, py_name, py_signature.args,
                 annotations, method_code)
 
-        overload = Overload(AccessSpecifier.PUBLIC, member, py_name,
-                cpp_signature, py_signature, method_code=method_code)
+        overload = Overload(access_specifier=AccessSpecifier.PUBLIC,
+                common=member, cpp_name=py_name, cpp_signature=cpp_signature,
+                py_signature=py_signature, method_code=method_code)
 
         if self.scope is None:
             self.module_state.module.overloads.append(overload)

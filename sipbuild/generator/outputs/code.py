@@ -30,16 +30,15 @@ def output_code(spec, bindings, project, buildable):
     """ Output the C/C++ code and add it to the given buildable. """
 
     module = spec.module
-    py_debug = project.py_debug
 
     if spec.is_composite:
         source_name = os.path.join(buildable.build_dir,
                 'sip' + module.py_name + 'cmodule.c')
 
         with CompilationUnit(source_name, "Composite module code.", module, project, buildable, sip_api_file=False) as sf:
-            _composite_module_code(sf, spec, py_debug)
+            _composite_module_code(sf, spec, project.py_debug)
     else:
-        _module_code(spec, bindings, project, py_debug, buildable)
+        _module_code(spec, bindings, project, buildable)
 
 
 def _internal_api_header(sf, spec, bindings, project, name_cache_list):
@@ -453,7 +452,7 @@ f'    sip_import_component_module(sipModuleDict, "{mod.fq_py_name}");\n')
 ''')
 
 
-def _module_code(spec, bindings, project, py_debug, buildable):
+def _module_code(spec, bindings, project, buildable):
     """ Generate the C/C++ code for a module. """
 
     module = spec.module
@@ -527,9 +526,8 @@ def _module_code(spec, bindings, project, py_debug, buildable):
                     # than create one of its own.
                     use_sf = sf
 
-            _iface_file_cpp(spec, bindings, project, buildable, py_debug,
-                    iface_file, need_postinc, source_suffix, extension_data,
-                    use_sf)
+            _iface_file_cpp(spec, bindings, project, buildable, iface_file,
+                    need_postinc, source_suffix, extension_data, use_sf)
 
 
     # If there should be a Qt support API then generate stubs values for the
@@ -2107,7 +2105,7 @@ def _empty_iface_file(spec, iface_file):
     return True
 
 
-def _iface_file_cpp(spec, bindings, project, buildable, py_debug, iface_file,
+def _iface_file_cpp(spec, bindings, project, buildable, iface_file,
         need_postinc, source_suffix, extension_data, sf):
     """ Generate the C/C++ code for an interface. """
 
@@ -2151,13 +2149,13 @@ def _iface_file_cpp(spec, bindings, project, buildable, py_debug, iface_file,
             continue
 
         if klass.iface_file is iface_file:
-            _class_cpp(sf, spec, bindings, klass, extension_data, py_debug)
+            _class_cpp(sf, spec, bindings, project, klass, extension_data)
 
             # Generate any enclosed protected classes.
             for proto_klass in spec.classes:
                 if proto_klass.is_protected and proto_klass.scope is klass:
-                    _class_cpp(sf, spec, bindings, proto_klass, extension_data,
-                            py_debug)
+                    _class_cpp(sf, spec, bindings, project, proto_klass,
+                            extension_data)
 
     for mapped_type in spec.mapped_types:
         if mapped_type.iface_file is iface_file:
@@ -2398,11 +2396,11 @@ f'''        0, SIP_NULLPTR,
 ''')
 
 
-def _class_cpp(sf, spec, bindings, klass, extension_data, py_debug):
+def _class_cpp(sf, spec, bindings, project, klass, extension_data):
     """ Generate the C++ code for a class. """
 
     sf.write_code(klass.type_code)
-    _class_functions(sf, spec, bindings, klass, py_debug)
+    _class_functions(sf, spec, bindings, klass, project.py_debug)
     _access_functions(sf, spec, scope=klass)
 
     if klass.iface_file.type is not IfaceFileType.NAMESPACE:
@@ -2430,7 +2428,7 @@ f'''static PyObject *convertFrom_{name}(void *sipCppV, PyObject *{xfer})
 
             sf.write('}\n')
 
-    _type_definition(sf, spec, bindings, klass, extension_data, py_debug)
+    _type_definition(sf, spec, bindings, project, klass, extension_data)
 
 
 def _get_function_table(members):
@@ -5551,7 +5549,7 @@ def _argument_variable(sf, spec, scope, arg, arg_nr):
                 sf.write(f'        PyObject *{arg_name}Keep{supporting_default_value};\n')
 
 
-def _type_definition(sf, spec, bindings, klass, extension_data, py_debug):
+def _type_definition(sf, spec, bindings, project, klass, extension_data):
     """ Generate the type structure that contains all the information needed by
     the meta-type.  A sub-set of this is used to extend namespaces.
     """
@@ -5749,7 +5747,7 @@ static sipPySlotDef slots_{klass_name}[] = {{
     if module.call_super_init:
         flags.append('SIP_TYPE_SUPER_INIT')
 
-    if not py_debug and module.use_limited_api:
+    if not project.py_debug and module.use_limited_api:
         flags.append('SIP_TYPE_LIMITED_API')
 
     flags.append('SIP_TYPE_NAMESPACE' if klass.iface_file.type is IfaceFileType.NAMESPACE else 'SIP_TYPE_CLASS')

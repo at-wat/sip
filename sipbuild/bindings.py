@@ -150,7 +150,7 @@ class Bindings(Configurable):
                 project.sip_module)
 
         # Resolve the types.
-        resolve(spec, modules)
+        resolve(spec, modules, project)
 
         module = spec.module
 

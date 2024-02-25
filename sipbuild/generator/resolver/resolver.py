@@ -23,7 +23,7 @@ from ..utils import (append_iface_file, argument_as_str, cached_name,
         same_signature, search_typedefs)
 
 
-def resolve(spec, modules):
+def resolve(spec, modules, project):
     """ Resolve all types of a parsed specification and create additional views
     so that code can be generated.
     """
@@ -145,6 +145,8 @@ def resolve(spec, modules):
         _check_helpers(spec, klass)
         _check_properties(klass, error_log)
 
+        project.call_build_system_extensions('complete_class', klass)
+
     # Number the exceptions as they will be seen by the main module.
     for exception in spec.exceptions:
         exception_mod = exception.iface_file.module
@@ -168,6 +170,7 @@ def resolve(spec, modules):
             exception_mod.nr_exceptions += 1
 
     # For PyQt6 mark all enum interface files as being used.
+    # XXX
     if 'PyQt6' in spec.plugins:
         for enum in spec.enums:
             if enum.module is spec.module:

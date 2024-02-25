@@ -96,6 +96,22 @@ class BuildSystemExtension:
 
         return value
 
+    def query_class_cpp_name(self, extendable):
+        """ Return the fully qualified C++ name of an extendable class. """
+
+        return extendable.iface_file.fq_cpp_name.as_cpp
+
+    def query_class_is_subclass(self, extendable, module_name, class_name):
+        """ Return True if a class with the given name is the same as, or is a
+        subclass of the extendable class.
+        """
+
+        for klass in extendable.mro:
+            if klass.iface_file.module.fq_py_name.name == module_name and klass.py_name.name == class_name:
+                return True
+
+        return False
+
     # The rest of the class are the stubs to be re-implemented by sub-classes.
 
     def append_class_extension_code(self, extendable, name, code):
@@ -116,6 +132,11 @@ class BuildSystemExtension:
         """ Append code fragments to be included in all generated sipAPI*.h
         files.
         """
+
+        pass
+
+    def complete_class(self, extendable):
+        """ Complete the definition of a class. """
 
         pass
 

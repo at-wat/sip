@@ -58,11 +58,11 @@ keywords = {
     'bool', 'char', 'class', 'const', 'double', 'enum', 'explicit', 'false',
     'final', 'float', 'int', 'long', 'namespace', 'noexcept', 'NULL',
     'operator', 'private', 'protected', 'public', 'Py_hash_t', 'Py_ssize_t',
-    'Q_SIGNAL', 'Q_SIGNALS', 'Q_SLOT', 'Q_SLOTS', 'short', 'signals', 'signed',
-    'SIP_PYBUFFER', 'SIP_PYCALLABLE', 'SIP_PYDICT', 'SIP_PYENUM', 'SIP_PYLIST',
-    'SIP_PYOBJECT', 'SIP_PYSLICE', 'SIP_PYTUPLE', 'SIP_PYTYPE', 'size_t',
-    'slots', 'static', 'struct', 'template', 'throw', 'true', 'typedef',
-    'union', 'unsigned', 'virtual', 'void', 'wchar_t',
+    'Q_SIGNALS', 'Q_SLOTS', 'short', 'signals', 'signed', 'SIP_PYBUFFER',
+    'SIP_PYCALLABLE', 'SIP_PYDICT', 'SIP_PYENUM', 'SIP_PYLIST', 'SIP_PYOBJECT',
+    'SIP_PYSLICE', 'SIP_PYTUPLE', 'SIP_PYTYPE', 'size_t', 'slots', 'static',
+    'struct', 'template', 'throw', 'true', 'typedef', 'union', 'unsigned',
+    'virtual', 'void', 'wchar_t',
 
     # Remove in SIP v7.
     'SIP_SSIZE_T',
@@ -81,8 +81,9 @@ directive_keywords = {
 
 # The lexer tokens.
 tokens = [
-    'CODE_BLOCK', 'DOTTED_NAME', 'ELLIPSIS', 'EOF', 'EOL', 'FILE_PATH',
-    'LOGICAL_OR', 'NAME', 'NUMBER', 'QUOTED_CHAR', 'REAL', 'SCOPE', 'STRING',
+    'CODE_BLOCK', 'DOTTED_NAME', 'ELLIPSIS', 'EOF', 'EOL', 'EXTENSION_KEYWORD',
+    'FILE_PATH', 'LOGICAL_OR', 'NAME', 'NUMBER', 'QUOTED_CHAR', 'REAL',
+    'SCOPE', 'STRING',
 ]
 
 tokens.extend(directives)

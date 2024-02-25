@@ -319,7 +319,7 @@ class KwArgs(Enum):
     OPTIONAL = auto()
 
 
-# TODO
+# XXX
 class PyQtMethodSpecifier(Enum):
     """ The PyQt-specific method specifier. """
 
@@ -1156,7 +1156,7 @@ class Overload(Extendable):
     # The Python signature.
     py_signature: Optional['Signature'] = None
 
-    # The PyQt method specifier.
+    # The PyQt method specifier.  PyQt5 and PyQt6, remove in SIP v7.
     # XXX
     pyqt_method_specifier: Optional[PyQtMethodSpecifier] = None
 
@@ -1308,8 +1308,7 @@ class Specification:
     # removed in SIP v7.
     plugins: List[str] = field(default_factory=list)
 
-    # The QObject class.
-    # XXX
+    # The QObject class.  PyQt5 and PyQt6, remove in SIP v7.
     pyqt_qobject: Optional['WrappedClass'] = None
 
     # The list of typedefs.
@@ -1617,7 +1616,6 @@ class WrappedClass(Extendable):
     pyqt_flags: int = 0
 
     # The /PyQtFlagsEnums/.  PyQt5 only, remove in SIP v7.
-    # XXX
     pyqt_flags_enums: Optional[List[str]] = None
 
     # The /PyQtInterface/.  PyQt5 and PyQt6, remove in SIP v7.
@@ -1625,7 +1623,6 @@ class WrappedClass(Extendable):
 
     # Set if /PyQtNoQMetaObject/ was specified.  PyQt5 and PyQt6, remove in SIP
     # v7.
-    # XXX
     pyqt_no_qmetaobject: bool = False
 
     # The real class if this is a proxy or a namespace extender.

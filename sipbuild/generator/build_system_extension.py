@@ -140,65 +140,75 @@ class BuildSystemExtension:
 
         pass
 
+    def get_parser_keywords(self):
+        """ Return a sequence of keywords to be recognised by the parser. """
+
+        return ()
+
     def parse_argument_annotation(self, extendable, name, raw_value, location):
         """ Parse an argument annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_class_annotation(self, extendable, name, raw_value, location):
         """ Parse a class annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_ctor_annotation(self, extendable, name, raw_value, location):
         """ Parse a ctor annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_dtor_annotation(self, extendable, name, raw_value, location):
         """ Parse a dtor annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_enum_annotation(self, extendable, name, raw_value, location):
         """ Parse an enum annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_enum_member_annotation(self, extendable, name, raw_value,
             location):
         """ Parse an enum member annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_function_annotation(self, extendable, name, raw_value, location):
         """ Parse a function annotation.  Return True if it was parsed. """
 
-        pass
+        return False
+
+    def parse_function_keyword(self, extendable, keyword):
+        """ Parse a function keyword.  Return True if it was parsed. """
+
+        return False
 
     def parse_mapped_type_annotation(self, extendable, name, raw_value,
             location):
         """ Parse a mapped type annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_namespace_annotation(self, extendable, name, raw_value,
             location):
         """ Parse a namespace annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_typedef_annotation(self, extendable, name, raw_value, location):
         """ Parse a typedef annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_union_annotation(self, extendable, name, raw_value, location):
         """ Parse a union annotation.  Return True if it was parsed. """
 
-        pass
+        return False
 
     def parse_variable_annotation(self, extendable, name, raw_value, location):
         """ Parse a variable annotation.  Return True if it was parsed. """
 
-        pass
+        return False

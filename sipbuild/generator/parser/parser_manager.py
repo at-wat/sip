@@ -39,6 +39,11 @@ class ParserManager:
             include_dirs, sip_module, is_strict):
         """ Initialise the manager. """
 
+        # Get any extension keywords.
+        self._extension_keywords = []
+        for extension in bindings.project.build_system_extensions:
+            self._extension_keywords.extend(extension.get_parser_keywords())
+
         # Create the lexer.
         self._lexer = lex.lex(module=tokens)
         self._lexer.pm = self
@@ -287,6 +292,8 @@ class ParserManager:
             else:
                 if '.' in value:
                     token_type = 'DOTTED_NAME'
+                elif value in self._extension_keywords:
+                    token_type = 'EXTENSION_KEYWORD'
                 else:
                     token_type = 'NAME'
 

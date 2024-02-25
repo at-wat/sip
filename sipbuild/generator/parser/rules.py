@@ -2044,52 +2044,66 @@ def p_dtor(p):
 
 
 def p_method_variable(p):
-    """method_variable : Q_SIGNAL simple_method_variable
-        | Q_SLOT simple_method_variable
-        | simple_method_variable"""
+    """method_variable : EXTENSION_KEYWORD virtual function
+        | EXTENSION_KEYWORD static function
+        | EXTENSION_KEYWORD function
+        | virtual function
+        | static function
+        | static variable
+        | function
+        | variable"""
 
     pm = p.parser.pm
 
-    if len(p) == 3:
-        item = p[2]
+    if pm.skipping:
+        return
 
-        if isinstance(item, Overload):
-            item.pyqt_method_specifier = PyQtMethodSpecifier.SIGNAL if p[1] == 'Q_SIGNAL' else PyQtMethodSpecifier.SLOT
+    extension_keyword = None
+    item_qualifier = None
+
+    len_p = len(p)
+
+    if len_p == 4:
+        extension_keyword = p[1]
+        item_qualifier = p[2]
+        item = p[3]
+    elif len_p == 3:
+        if p[1] in ('static', 'virtual'):
+            item_qualifier = p[1]
         else:
-            pm.parser_error(p, 1,
-                    "a PyQt method specifier can only be applied to member functions")
+            extension_keyword = p[1]
+
+        item = p[2]
     else:
         item = p[1]
+
+    if extension_keyword is not None:
+        keyword_handled = False
+
+        for extension in pm.bindings.project.build_system_extensions:
+            if extension.parse_function_keyword(item, extension_keyword):
+                keyword_handled = True
+                break
+
+        if pm.spec.plugins:
+            if extension_keyword == 'Q_SIGNAL':
+                item.pyqt_method_specifier = PyQtMethodSpecifier.SIGNAL
+                keyword_handled = True
+            elif extension_keyword == 'Q_SLOT':
+                item.pyqt_method_specifier = PyQtMethodSpecifier.SLOT
+                keyword_handled = True
+
+        if not keyword_handled:
+            pm.parser_error(p, 1, f"unknown keyword '{extension_keyword}'")
+
+    if item_qualifier == 'static':
+        item.is_static = True
+    elif item_qualifier == 'virtual' and not item.is_final:
+        item.is_virtual = True
+        p.parser.pm.scope.needs_shadow = True
 
     if isinstance(item, Overload):
         pm.validate_overload(p, 1, item)
-
-
-def p_simple_method_variable(p):
-    """simple_method_variable : virtual function
-        | static plain_method_variable
-        | plain_method_variable"""
-
-    if len(p) == 3:
-        item = p[2]
-
-        if item is not None:
-            if p[1] == 'static':
-                item.is_static = True
-            elif not item.is_final:
-                item.is_virtual = True
-                p.parser.pm.scope.needs_shadow = True
-    else:
-        item = p[1]
-
-    p[0] = item
-
-
-def p_plain_method_variable(p):
-    """plain_method_variable : function
-        | variable"""
-
-    p[0] = p[1]
 
 
 def p_public_specifier(p):
@@ -2128,6 +2142,7 @@ def p_private_specifier(p):
     pm.scope_pyqt_method_specifier = p[2]
 
 
+# XXX
 def p_signals_specifier(p):
     """signals_specifier : signals ':'
         | Q_SIGNALS ':'"""
@@ -2141,6 +2156,7 @@ def p_signals_specifier(p):
     pm.scope_pyqt_method_specifier = PyQtMethodSpecifier.SIGNAL
 
 
+# XXX
 def p_opt_slots(p):
     """opt_slots : slots
         | Q_SLOTS
@@ -2425,7 +2441,9 @@ def p_function_decl(p):
             overload, _FUNCTION_ANNOTATIONS, "function")
 
     pm.apply_type_annotations(p, 10, p[1], annotations)
-    p[0] = pm.complete_overload(p, 1, overload, p[2], p[1], p[4], annotations)
+    pm.complete_overload(p, 1, overload, p[2], p[1], p[4], annotations)
+
+    p[0] = overload
 
 
 def p_assignment_operator_decl(p):

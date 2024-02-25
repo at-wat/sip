@@ -1164,8 +1164,9 @@ class ParserManager:
     def deprecated(self, p, symbol, instead=None):
         """ Issue a deprecation message about a symbol. """
 
-        deprecated(f"'{p[symbol]}'", instead=instead, filename=self._sip_file,
-                line_nr=p.lineno(symbol))
+        if self.module_state.module is self.spec.module:
+            deprecated(f"'{p[symbol]}'", instead=instead,
+                    filename=self._sip_file, line_nr=p.lineno(symbol))
 
     def ensure_import(self):
         """ We allow %Modules that are part of a %CompositeModule to be either

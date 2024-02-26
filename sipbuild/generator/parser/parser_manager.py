@@ -40,9 +40,10 @@ class ParserManager:
         """ Initialise the manager. """
 
         # Get any extension keywords.
-        self._extension_keywords = []
+        self._ext_function_keywords = []
         for extension in bindings.project.build_system_extensions:
-            self._extension_keywords.extend(extension.get_parser_keywords())
+            self._ext_function_keywords.extend(
+                    extension.get_function_keywords())
 
         # Create the lexer.
         self._lexer = lex.lex(module=tokens)
@@ -292,8 +293,8 @@ class ParserManager:
             else:
                 if '.' in value:
                     token_type = 'DOTTED_NAME'
-                elif value in self._extension_keywords:
-                    token_type = 'EXTENSION_KEYWORD'
+                elif value in self._ext_function_keywords:
+                    token_type = 'EXT_FUNCTION_KEYWORD'
                 else:
                     token_type = 'NAME'
 

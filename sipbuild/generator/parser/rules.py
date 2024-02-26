@@ -2044,9 +2044,9 @@ def p_dtor(p):
 
 
 def p_method_variable(p):
-    """method_variable : EXTENSION_KEYWORD virtual function
-        | EXTENSION_KEYWORD static function
-        | EXTENSION_KEYWORD function
+    """method_variable : EXT_FUNCTION_KEYWORD virtual function
+        | EXT_FUNCTION_KEYWORD static function
+        | EXT_FUNCTION_KEYWORD function
         | virtual function
         | static function
         | static variable

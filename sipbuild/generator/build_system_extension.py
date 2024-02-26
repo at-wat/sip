@@ -140,8 +140,10 @@ class BuildSystemExtension:
 
         pass
 
-    def get_parser_keywords(self):
-        """ Return a sequence of keywords to be recognised by the parser. """
+    def get_function_keywords(self):
+        """ Return a sequence of function keywords to be recognised by the
+        parser.
+        """
 
         return ()
 

@@ -22,7 +22,7 @@ literals = '(){}.,;:=!-+*/&|~<>[]%^'
 
 
 # The non-code directives.
-directives = {
+directives = (
     'AutoPyName', 'CompositeModule', 'DefaultDocstringFormat',
     'DefaultDocstringSignature', 'DefaultEncoding', 'DefaultMetatype',
     'DefaultSupertype', 'End', 'Exception', 'Feature', 'HideNamespace', 'If',
@@ -31,11 +31,11 @@ directives = {
 
     # Remove in SIP v7.
     'Plugin',
-}
+)
 
 
 # The code directives.
-code_directives = {
+code_directives = (
     'AccessCode', 'BIGetBufferCode', 'BIReleaseBufferCode',
     'ConvertFromTypeCode', 'ConvertToSubClassCode', 'ConvertToTypeCode',
     'Copying', 'Docstring', 'ExportedHeaderCode', 'ExportedTypeHintCode',
@@ -50,11 +50,11 @@ code_directives = {
     # Remove in SIP v7.
     'BIGetCharBufferCode', 'BIGetReadBufferCode', 'BIGetSegCountCode',
     'BIGetWriteBufferCode',
-}
+)
 
 
 # The plain keywords.
-keywords = {
+keywords = (
     'bool', 'char', 'class', 'const', 'double', 'enum', 'explicit', 'false',
     'final', 'float', 'int', 'long', 'namespace', 'noexcept', 'NULL',
     'operator', 'private', 'protected', 'public', 'Py_hash_t', 'Py_ssize_t',
@@ -66,30 +66,34 @@ keywords = {
 
     # Remove in SIP v7.
     'SIP_SSIZE_T',
-}
+)
 
 
 # The directive keywords.
-directive_keywords = {
+directive_keywords = (
     'all_raise_py_exception', 'call_super_init', 'default_VirtualErrorHandler',
     'False', 'format', 'get', 'id', 'keyword_arguments', 'language',
     'licensee', 'name', 'optional', 'order', 'remove_leading', 'set',
     'signature', 'timestamp', 'True', 'type', 'py_ssize_t_clean',
     'use_argument_names', 'use_limited_api',
-}
+)
+
+
+# The build system extension hooks.
+extension_hooks = ('EXT_FUNCTION_KEYWORD', )
 
 
 # The lexer tokens.
 tokens = [
-    'CODE_BLOCK', 'DOTTED_NAME', 'ELLIPSIS', 'EOF', 'EOL', 'EXTENSION_KEYWORD',
-    'FILE_PATH', 'LOGICAL_OR', 'NAME', 'NUMBER', 'QUOTED_CHAR', 'REAL',
-    'SCOPE', 'STRING',
+    'CODE_BLOCK', 'DOTTED_NAME', 'ELLIPSIS', 'EOF', 'EOL', 'FILE_PATH',
+    'LOGICAL_OR', 'NAME', 'NUMBER', 'QUOTED_CHAR', 'REAL', 'SCOPE', 'STRING',
 ]
 
 tokens.extend(directives)
 tokens.extend(code_directives)
 tokens.extend(keywords)
 tokens.extend(directive_keywords)
+tokens.extend(extension_hooks)
 
 
 # Handle EOF.

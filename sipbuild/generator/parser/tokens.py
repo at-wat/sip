@@ -58,11 +58,10 @@ keywords = (
     'bool', 'char', 'class', 'const', 'double', 'enum', 'explicit', 'false',
     'final', 'float', 'int', 'long', 'namespace', 'noexcept', 'NULL',
     'operator', 'private', 'protected', 'public', 'Py_hash_t', 'Py_ssize_t',
-    'Q_SIGNALS', 'Q_SLOTS', 'short', 'signals', 'signed', 'SIP_PYBUFFER',
-    'SIP_PYCALLABLE', 'SIP_PYDICT', 'SIP_PYENUM', 'SIP_PYLIST', 'SIP_PYOBJECT',
-    'SIP_PYSLICE', 'SIP_PYTUPLE', 'SIP_PYTYPE', 'size_t', 'slots', 'static',
-    'struct', 'template', 'throw', 'true', 'typedef', 'union', 'unsigned',
-    'virtual', 'void', 'wchar_t',
+    'short', 'signed', 'SIP_PYBUFFER', 'SIP_PYCALLABLE', 'SIP_PYDICT',
+    'SIP_PYENUM', 'SIP_PYLIST', 'SIP_PYOBJECT', 'SIP_PYSLICE', 'SIP_PYTUPLE',
+    'SIP_PYTYPE', 'size_t', 'static', 'struct', 'template', 'throw', 'true',
+    'typedef', 'union', 'unsigned', 'virtual', 'void', 'wchar_t',
 
     # Remove in SIP v7.
     'SIP_SSIZE_T',
@@ -80,7 +79,7 @@ directive_keywords = (
 
 
 # The build system extension hooks.
-extension_hooks = ('EXT_FUNCTION_KEYWORD', )
+extension_hooks = ('EXT_ACCESS_SPECIFIER', 'EXT_FUNCTION_KEYWORD', )
 
 
 # The lexer tokens.

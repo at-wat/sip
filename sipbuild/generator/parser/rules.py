@@ -1926,10 +1926,7 @@ def p_class_line(p):
         | namespace_decl
         | struct_decl
         | union_decl
-        | public_specifier
-        | protected_specifier
-        | private_specifier
-        | signals_specifier
+        | access_specifier
         | convert_from_type_code
         | convert_to_subclass_code
         | convert_to_type_code
@@ -2078,91 +2075,92 @@ def p_method_variable(p):
         item = p[1]
 
     if extension_keyword is not None:
-        keyword_handled = False
-
         for extension in pm.bindings.project.build_system_extensions:
             if extension.parse_function_keyword(item, extension_keyword):
-                keyword_handled = True
                 break
+        else:
+            keyword_handled = False
 
-        if pm.spec.plugins:
-            if extension_keyword == 'Q_SIGNAL':
-                item.pyqt_method_specifier = PyQtMethodSpecifier.SIGNAL
-                keyword_handled = True
-            elif extension_keyword == 'Q_SLOT':
-                item.pyqt_method_specifier = PyQtMethodSpecifier.SLOT
-                keyword_handled = True
+            if pm.spec.plugins:
+                if extension_keyword == 'Q_SIGNAL':
+                    item.pyqt_method_specifier = PyQtMethodSpecifier.SIGNAL
+                    keyword_handled = True
+                elif extension_keyword == 'Q_SLOT':
+                    item.pyqt_method_specifier = PyQtMethodSpecifier.SLOT
+                    keyword_handled = True
 
-        if not keyword_handled:
-            pm.parser_error(p, 1, f"unknown keyword '{extension_keyword}'")
+            if not keyword_handled:
+                pm.parser_error(p, 1,
+                        f"unknown function keyword '{extension_keyword}'")
 
     if item_qualifier == 'static':
         item.is_static = True
     elif item_qualifier == 'virtual' and not item.is_final:
         item.is_virtual = True
-        p.parser.pm.scope.needs_shadow = True
+        pm.scope.needs_shadow = True
 
     if isinstance(item, Overload):
         pm.validate_overload(p, 1, item)
 
 
-def p_public_specifier(p):
-    "public_specifier : public opt_slots ':'"
+def p_access_specifier(p):
+    "access_specifier : primary_access_specifier opt_secondary_access_specifier ':'"
 
     pm = p.parser.pm
 
     if pm.skipping:
         return
 
-    pm.scope_access_specifier = AccessSpecifier.PUBLIC
-    pm.scope_pyqt_method_specifier = p[2]
+    # Allow build system extensions to complete the parsing.
+    for extension in pm.bindings.project.build_system_extensions:
+        primary = extension.parse_class_access_specifier(pm.scope, p[1], p[2])
+        if primary is not None:
+            break
+    else:
+        # See if it is a standard C++ access specifier.
+        if p[1] in ('public', 'protected', 'private') and p[2] is None:
+            pm.scope_pyqt_method_specifier = None
+            primary = p[1]
+        elif pm.spec.plugins:
+            # See if it is a legacy plugin.
+            if p[1] in ('signals', 'Q_SIGNALS') and p[2] == None:
+                pm.scope_pyqt_method_specifier = PyQtMethodSpecifier.SIGNAL
+                primary = 'public'
+            elif p[1] in ('public', 'protected', 'private') and p[2] in ('slots', 'Q_SLOTS'):
+                pm.scope_pyqt_method_specifier = PyQtMethodSpecifier.SLOT
+                primary = p[1]
+            else:
+                primary = None
+        else:
+            primary = None
+
+    if primary == 'public':
+        pm.scope_access_specifier = AccessSpecifier.PUBLIC
+    elif primary == 'protected':
+        pm.scope_access_specifier = AccessSpecifier.PROTECTED
+    elif primary == 'private':
+        pm.scope_access_specifier = AccessSpecifier.PRIVATE
+    else:
+        primary = p[1]
+        secondary = " " + p[2] if p[2] is not None else ''
+
+        pm.parser_error(p, 1, f"unknown access specifier '{primary}{secondary}'")
 
 
-def p_protected_specifier(p):
-    "protected_specifier : protected opt_slots ':'"
+def p_primary_access_specifier(p):
+    """primary_access_specifier : EXT_ACCESS_SPECIFIER
+        | public
+        | protected
+        | private"""
 
-    pm = p.parser.pm
-
-    if pm.skipping:
-        return
-
-    pm.scope_access_specifier = AccessSpecifier.PROTECTED
-    pm.scope_pyqt_method_specifier = p[2]
+    p[0] = p[1]
 
 
-def p_private_specifier(p):
-    "private_specifier : private opt_slots ':'"
-
-    pm = p.parser.pm
-
-    if pm.skipping:
-        return
-
-    pm.scope_access_specifier = AccessSpecifier.PRIVATE
-    pm.scope_pyqt_method_specifier = p[2]
-
-
-# XXX
-def p_signals_specifier(p):
-    """signals_specifier : signals ':'
-        | Q_SIGNALS ':'"""
-
-    pm = p.parser.pm
-
-    if pm.skipping:
-        return
-
-    pm.scope_access_specifier = AccessSpecifier.PUBLIC
-    pm.scope_pyqt_method_specifier = PyQtMethodSpecifier.SIGNAL
-
-
-# XXX
-def p_opt_slots(p):
-    """opt_slots : slots
-        | Q_SLOTS
+def p_opt_secondary_access_specifier(p):
+    """opt_secondary_access_specifier : EXT_ACCESS_SPECIFIER
         | empty"""
 
-    p[0] = None if p[1] is None else PyQtMethodSpecifier.SLOT
+    p[0] = p[1]
 
 
 # C/C++ enums. ################################################################

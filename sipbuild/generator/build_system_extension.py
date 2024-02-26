@@ -140,6 +140,13 @@ class BuildSystemExtension:
 
         pass
 
+    def get_class_access_specifier_keywords(self):
+        """ Return a sequence of class action specifier keywords to be
+        recognised by the parser.
+        """
+
+        return ()
+
     def get_function_keywords(self):
         """ Return a sequence of function keywords to be recognised by the
         parser.
@@ -151,6 +158,14 @@ class BuildSystemExtension:
         """ Parse an argument annotation.  Return True if it was parsed. """
 
         return False
+
+    def parse_class_access_specifier(self, extendable, primary, secondary):
+        """ Parse a primary and optional secondary class access specifier.  If
+        it was parsed return the C++ standard access specifier (ie. 'public',
+        'protected' or 'private') to use, otherwise return None.
+        """
+
+        return None
 
     def parse_class_annotation(self, extendable, name, raw_value, location):
         """ Parse a class annotation.  Return True if it was parsed. """

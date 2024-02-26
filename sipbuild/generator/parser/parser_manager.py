@@ -40,8 +40,12 @@ class ParserManager:
         """ Initialise the manager. """
 
         # Get any extension keywords.
+        self._ext_access_specifiers = []
         self._ext_function_keywords = []
+
         for extension in bindings.project.build_system_extensions:
+            self._ext_access_specifiers.extend(
+                    extension.get_class_access_specifier_keywords())
             self._ext_function_keywords.extend(
                     extension.get_function_keywords())
 
@@ -293,6 +297,8 @@ class ParserManager:
             else:
                 if '.' in value:
                     token_type = 'DOTTED_NAME'
+                elif value in self._ext_access_specifiers:
+                    token_type = 'EXT_ACCESS_SPECIFIER'
                 elif value in self._ext_function_keywords:
                     token_type = 'EXT_FUNCTION_KEYWORD'
                 else:

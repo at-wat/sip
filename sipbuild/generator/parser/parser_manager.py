@@ -1698,22 +1698,23 @@ class ParserManager:
         annotations = {}
 
         for p, symbol, name, raw_value in raw_annotations:
-            if self.bindings.project.call_build_system_extensions(extension_method, extendable, name, raw_value, (self, p, symbol)):
-                continue
+            for extension in self.bindings.project.build_system_extensions:
+                if getattr(extension, extension_method)(extendable, name, raw_value, (self, p, symbol)):
+                    break
+            else:
+                if name not in builtin_annotations:
+                    self.parser_error(p, symbol,
+                            "{0} is not a valid {1} annotation".format(name,
+                                    context))
 
-            if name not in builtin_annotations:
-                self.parser_error(p, symbol,
-                        "{0} is not a valid {1} annotation".format(name,
-                                context))
+                try:
+                    value = validate_annotation_value(self, p, symbol, name,
+                            raw_value)
+                except InvalidAnnotation as e:
+                    self.parser_error(p, symbol, str(e))
+                    value = e.use
 
-            try:
-                value = validate_annotation_value(self, p, symbol, name,
-                        raw_value)
-            except InvalidAnnotation as e:
-                self.parser_error(p, symbol, str(e))
-                value = e.use
-
-            annotations[name] = value
+                annotations[name] = value
 
         return annotations
 

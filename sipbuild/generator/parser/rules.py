@@ -1222,10 +1222,9 @@ def p_plugin(p):
         return
 
     # %Plugin is incompatible with build system extensions.
-    # XXX - comment out for development
-    #if pm.bindings.project.build_system_extensions:
-    #    pm.parser_error(p, 1,
-    #            "%Plugin cannot be used with build system extensions")
+    if pm.bindings.project.build_system_extensions:
+        pm.parser_error(p, 1,
+                "%Plugin cannot be used with build system extensions")
 
     pm.deprecated(p, 1)
 

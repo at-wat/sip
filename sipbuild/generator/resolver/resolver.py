@@ -145,7 +145,8 @@ def resolve(spec, modules, project):
         _check_helpers(spec, klass)
         _check_properties(klass, error_log)
 
-        project.call_build_system_extensions('complete_class', klass)
+        project.call_build_system_extensions('complete_class_definition',
+                klass)
 
     # Number the exceptions as they will be seen by the main module.
     for exception in spec.exceptions:
@@ -1294,6 +1295,7 @@ def _resolve_py_signature_types(spec, mod, scope, overload, error_log,
     result = overload.py_signature.result
 
     if result.type is not ArgumentType.VOID or len(result.derefs) != 0:
+        # XXX - would need a complete_function_definition() extension call and a way to check the return type
         if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
             _log_overload_error(error_log, "is a signal and must return void",
                     overload, scope=scope)
@@ -1320,6 +1322,7 @@ def _resolve_py_signature_types(spec, mod, scope, overload, error_log,
         # Note signal arguments are restricted in their types because we don't
         # (yet) support handwritten code for them.
         if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
+            # XXX - would need a complete_function_definition() extension call and a way to check an argument type
             if not _supported_type(scope, overload, arg, error_log):
                 _log_overload_error(error_log,
                         "argument {0} has an unsupported type for a Python signature".format(

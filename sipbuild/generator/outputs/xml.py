@@ -185,6 +185,7 @@ def _function(parent, spec, member, overloads, scope=None):
 
     for overload in overloads:
         if overload.common is member and overload.access_specifier is not AccessSpecifier.PRIVATE:
+            # XXX - need undocumented extension calls
             if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
                 attrib = {}
 
@@ -236,6 +237,7 @@ def _overload(parent, spec, scope, overload, extends, is_static):
     if is_static:
         attrib['static'] = '1'
 
+    # XXX - need undocumented extension calls
     if overload.pyqt_method_specifier is PyQtMethodSpecifier.SLOT:
         attrib['slot'] = '1'
 

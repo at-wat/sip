@@ -6,6 +6,7 @@
 
 # Specify how scopes should be stripped.  Any other value is the number of
 # scopes to strip.
+# TODO - in SIP v7 there is no requirement to strip arbitary numbers pf scopes.
 STRIP_NONE = 0      # Don't strip any scopes.
 STRIP_GLOBAL = -1   # Strip the global scope.
 

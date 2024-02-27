@@ -437,6 +437,7 @@ def _callable(pf, spec, member, overloads, defined, is_method=False, indent=0):
         # Signals can have the same name as ordinary methods however
         # 'typing.overload' cannot be used with ClassVar.  We choose to
         # generate a type hint for the signal rather than any method.
+        # XXX - ???
         if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
             scope = '' if spec.module.py_name == 'QtCore' else 'QtCore.'
 

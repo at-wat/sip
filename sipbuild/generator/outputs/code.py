@@ -5915,6 +5915,7 @@ def _can_set_variable(variable):
     return True
 
 
+# XXX - need to be able to write this code in the extension
 def _pyqt_emitters(sf, spec, klass):
     """ Generate the PyQt emitters for a class. """
 
@@ -6445,6 +6446,7 @@ def _skip_overload(overload, member, klass, scope, want_local=True):
         return True
 
     # Skip if it's a signal.
+    # XXX - need a filtering mechanism (what is the context?)
     if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
         return True
 
@@ -8573,7 +8575,8 @@ def _declare_limited_api(sf, py_debug, module=None):
 ''')
 
 
-def _plugin_signals_table(sf, spec, bindings, klass):
+# XXX - need to be able to write this code in the extension
+def _pyqt_plugin_signals_table(sf, spec, bindings, klass):
     """ Generate the PyQt signals table and return True if anything was
     generated.
     """
@@ -8640,7 +8643,7 @@ def _pyqt_class_plugin(sf, spec, bindings, klass):
     anything was generated.
     """
 
-    is_signals = _plugin_signals_table(sf, spec, bindings, klass)
+    is_signals = _pyqt_plugin_signals_table(sf, spec, bindings, klass)
 
     # The PyQt6 support code doesn't assume the structure is generated.
     if _pyqt6(spec):
@@ -8914,6 +8917,7 @@ def _callable_overloads(member, overloads):
     """ An iterator over the non-private and non-signal overloads. """
 
     for overload in overloads:
+        # XXX - need a filtering mechanism, context?
         if overload.common is member and overload.access_specifier is not AccessSpecifier.PRIVATE and overload.pyqt_method_specifier is not PyQtMethodSpecifier.SIGNAL:
             yield overload
 

@@ -319,7 +319,7 @@ class KwArgs(Enum):
     OPTIONAL = auto()
 
 
-# XXX
+# PyQt5 and PyQt6.  Remove in SIP v7.
 class PyQtMethodSpecifier(Enum):
     """ The PyQt-specific method specifier. """
 
@@ -630,7 +630,7 @@ class Argument(Extendable):
     # Set if /ResultSize/ was specified.
     result_size: bool = False
 
-    # The value of /ScopesStripped/.
+    # The value of /ScopesStripped/.  PyQt5 and PyQt6, remove in SIP v7.
     scopes_stripped: int = 0
 
     # The source location.

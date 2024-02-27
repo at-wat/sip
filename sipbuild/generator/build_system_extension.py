@@ -59,7 +59,8 @@ class BuildSystemExtension:
         pm, p, symbol = location
 
         try:
-            value = validate_integer(pm, p, symbol, name, raw_value)
+            value = validate_integer(pm, p, symbol, name, raw_value,
+                    optional=False)
         except InvalidAnnotation as e:
             pm.parser_error(p, symbol, str(e))
             value = e.use
@@ -96,12 +97,45 @@ class BuildSystemExtension:
 
         return value
 
+    @staticmethod
+    def parsing_error(error_message, location):
+        """ Register a parsing error at a particular location. """
+
+        pm, p, symbol = location
+
+        pm.parser_error(p, symbol, error_message)
+
     def query_class_cpp_name(self, extendable):
-        """ Return the fully qualified C++ name of an extendable class. """
+        """ Return the fully qualified C++ name of a class. """
 
         return extendable.iface_file.fq_cpp_name.as_cpp
 
-    def query_class_is_subclass(self, extendable, module_name, class_name):
+    @staticmethod
+    def query_class_function_group_pymethoddef_reference(klass, group_nr):
+        """ Return a reference to a PyMethod structure that handles a group of
+        overloaded class functions.
+        """
+
+        return f'&methods_{klass.iface_file.fq_cpp_name.as_word}[{group_nr}]'
+
+    @staticmethod
+    def query_class_function_groups(klass):
+        """ Return a sequence of the class's function groups.  A function group
+        is a sequence of overloaded functions with the same C++ name.
+        """
+
+        groups = {}
+
+        for overload in klass.overloads:
+            overload_list = groups.setdefault(overload.common.py_name.name, [])
+            overload_list.append(overload)
+
+        # The order is important as the index can be used to reference a
+        # particular group.
+        return [groups[m.py_name.name] for m in klass.members]
+
+    @staticmethod
+    def query_class_is_subclass(extendable, module_name, class_name):
         """ Return True if a class with the given name is the same as, or is a
         subclass of the extendable class.
         """
@@ -111,6 +145,21 @@ class BuildSystemExtension:
                 return True
 
         return False
+
+    def query_function_arguments(self, function):
+        """ Return a sequence of 5-tuples for each of the functions arguments.
+        The 1st element is True if const, the 2nd element is the name of the
+        C++ type, the 3rd element is the dereference string, the 4th element is
+        True if a reference, and the 5th element is the optional default value.
+        """
+
+        # XXX - needs more sophistication
+        return ()
+
+    def query_function_cpp_name(self, function):
+        """ Return the C++ name of a function. """
+
+        return function.cpp_name
 
     # The rest of the class are the stubs to be re-implemented by sub-classes.
 
@@ -135,8 +184,13 @@ class BuildSystemExtension:
 
         pass
 
-    def complete_class(self, extendable):
+    def complete_class_definition(self, extendable):
         """ Complete the definition of a class. """
+
+        pass
+
+    def complete_function_parse(self, extendable, extendable_scope):
+        """ Complete the parsing of a (possibly scoped) function. """
 
         pass
 

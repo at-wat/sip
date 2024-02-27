@@ -703,6 +703,7 @@ class ParserManager:
             member.has_protected = True
 
         if overload.access_specifier is AccessSpecifier.PUBLIC:
+            # XXX - add extension call to force the generation of a "derived class"
             if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
                 self.scope.needs_shadow = True
 
@@ -751,6 +752,7 @@ class ParserManager:
                 # If the overload is protected and defined in an imported
                 # module then we need to make sure that any other overloads'
                 # keyword argument names are marked as used.
+                # XXX - need a way to filter functions
                 if overload.pyqt_method_specifier is not PyQtMethodSpecifier.SIGNAL and overload.access_specifier is AccessSpecifier.PROTECTED and not self.in_main_module:
                     for kwod in self.scope.overloads:
                         if kwod.common is not member:
@@ -819,6 +821,10 @@ class ParserManager:
         if '__imatmul__' in annotations:
             self._add_auto_slot(p, symbol, annotations, '__imatmul__',
                     py_signature, overload.cpp_signature, overload.method_code)
+
+        self.bindings.project.call_build_system_extensions(
+                'complete_function_parse', overload,
+                self.scope if isinstance(self.scope, WrappedClass) else None)
 
     def add_mapped_type(self, p, symbol, mapped_type, cpp_type, annotations):
         """ Complete the implementation of a mapped type and add it to the
@@ -1742,6 +1748,7 @@ class ParserManager:
         if overload.is_static:
             cpp_only("static struct/union data members")
 
+            # XXX - need an extension call to query if a function is static
             if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
                 error("signals cannot be static")
 

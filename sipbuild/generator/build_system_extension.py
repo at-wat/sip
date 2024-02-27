@@ -36,7 +36,8 @@ class BuildSystemExtension:
 
         return extension_data
 
-    def parse_boolean_annotation(self, name, raw_value, location):
+    @staticmethod
+    def parse_boolean_annotation(name, raw_value, location):
         """ Parse and return the valid value of a boolean annotation. """
 
         from .parser import InvalidAnnotation, validate_boolean
@@ -51,7 +52,8 @@ class BuildSystemExtension:
 
         return value
 
-    def parse_integer_annotation(self, name, raw_value, location):
+    @staticmethod
+    def parse_integer_annotation(name, raw_value, location):
         """ Parse and return the valid value of an integer annotation. """
 
         from .parser import InvalidAnnotation, validate_integer
@@ -67,7 +69,8 @@ class BuildSystemExtension:
 
         return value
 
-    def parse_string_annotation(self, name, raw_value, location):
+    @staticmethod
+    def parse_string_annotation(name, raw_value, location):
         """ Parse and return the valid value of a string annotation. """
 
         from .parser import InvalidAnnotation, validate_string
@@ -82,7 +85,8 @@ class BuildSystemExtension:
 
         return value
 
-    def parse_string_list_annotation(self, name, raw_value, location):
+    @staticmethod
+    def parse_string_list_annotation(name, raw_value, location):
         """ Parse and return the valid value of a string list annotation. """
 
         from .parser import InvalidAnnotation, validate_string_list
@@ -105,10 +109,11 @@ class BuildSystemExtension:
 
         pm.parser_error(p, symbol, error_message)
 
-    def query_class_cpp_name(self, extendable):
+    @staticmethod
+    def query_class_cpp_name(klass):
         """ Return the fully qualified C++ name of a class. """
 
-        return extendable.iface_file.fq_cpp_name.as_cpp
+        return klass.iface_file.fq_cpp_name.as_cpp
 
     @staticmethod
     def query_class_function_group_pymethoddef_reference(klass, group_nr):
@@ -135,12 +140,12 @@ class BuildSystemExtension:
         return [groups[m.py_name.name] for m in klass.members]
 
     @staticmethod
-    def query_class_is_subclass(extendable, module_name, class_name):
+    def query_class_is_subclass(klass, module_name, class_name):
         """ Return True if a class with the given name is the same as, or is a
-        subclass of the extendable class.
+        subclass of the class.
         """
 
-        for klass in extendable.mro:
+        for klass in klass.mro:
             if klass.iface_file.module.fq_py_name.name == module_name and klass.py_name.name == class_name:
                 return True
 
@@ -156,21 +161,22 @@ class BuildSystemExtension:
         # XXX - needs more sophistication
         return ()
 
-    def query_function_cpp_name(self, function):
+    @staticmethod
+    def query_function_cpp_name(function):
         """ Return the C++ name of a function. """
 
         return function.cpp_name
 
     # The rest of the class are the stubs to be re-implemented by sub-classes.
 
-    def append_class_extension_code(self, extendable, name, code):
+    def append_class_extension_code(self, klass, name, code):
         """ Append code fragments that implements a class extension data
         structure.
         """
 
         pass
 
-    def append_mapped_type_extension_code(self, extendable, name, code):
+    def append_mapped_type_extension_code(self, mapped_type, name, code):
         """ Append code fragments that implements a mapped type extension data
         structure.
         """
@@ -184,12 +190,12 @@ class BuildSystemExtension:
 
         pass
 
-    def complete_class_definition(self, extendable):
+    def complete_class_definition(self, klass):
         """ Complete the definition of a class. """
 
         pass
 
-    def complete_function_parse(self, extendable, extendable_scope):
+    def complete_function_parse(self, function, scope):
         """ Complete the parsing of a (possibly scoped) function. """
 
         pass
@@ -208,12 +214,12 @@ class BuildSystemExtension:
 
         return ()
 
-    def parse_argument_annotation(self, extendable, name, raw_value, location):
+    def parse_argument_annotation(self, argument, name, raw_value, location):
         """ Parse an argument annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_class_access_specifier(self, extendable, primary, secondary):
+    def parse_class_access_specifier(self, klass, primary, secondary):
         """ Parse a primary and optional secondary class access specifier.  If
         it was parsed return the C++ standard access specifier (ie. 'public',
         'protected' or 'private') to use, otherwise return None.
@@ -221,65 +227,65 @@ class BuildSystemExtension:
 
         return None
 
-    def parse_class_annotation(self, extendable, name, raw_value, location):
+    def parse_class_annotation(self, klass, name, raw_value, location):
         """ Parse a class annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_ctor_annotation(self, extendable, name, raw_value, location):
+    def parse_ctor_annotation(self, ctor, name, raw_value, location):
         """ Parse a ctor annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_dtor_annotation(self, extendable, name, raw_value, location):
+    def parse_dtor_annotation(self, dtor, name, raw_value, location):
         """ Parse a dtor annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_enum_annotation(self, extendable, name, raw_value, location):
+    def parse_enum_annotation(self, enum, name, raw_value, location):
         """ Parse an enum annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_enum_member_annotation(self, extendable, name, raw_value,
+    def parse_enum_member_annotation(self, enum_member, name, raw_value,
             location):
         """ Parse an enum member annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_function_annotation(self, extendable, name, raw_value, location):
+    def parse_function_annotation(self, function, name, raw_value, location):
         """ Parse a function annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_function_keyword(self, extendable, keyword):
+    def parse_function_keyword(self, function, keyword):
         """ Parse a function keyword.  Return True if it was parsed. """
 
         return False
 
-    def parse_mapped_type_annotation(self, extendable, name, raw_value,
+    def parse_mapped_type_annotation(self, mapped_type, name, raw_value,
             location):
         """ Parse a mapped type annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_namespace_annotation(self, extendable, name, raw_value,
+    def parse_namespace_annotation(self, namespace, name, raw_value,
             location):
         """ Parse a namespace annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_typedef_annotation(self, extendable, name, raw_value, location):
+    def parse_typedef_annotation(self, typedef, name, raw_value, location):
         """ Parse a typedef annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_union_annotation(self, extendable, name, raw_value, location):
+    def parse_union_annotation(self, union, name, raw_value, location):
         """ Parse a union annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_variable_annotation(self, extendable, name, raw_value, location):
+    def parse_variable_annotation(self, variable, name, raw_value, location):
         """ Parse a variable annotation.  Return True if it was parsed. """
 
         return False

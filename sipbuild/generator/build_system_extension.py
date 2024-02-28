@@ -3,6 +3,13 @@
 # Copyright (c) 2024 Phil Thompson <phil@riverbankcomputing.com>
 
 
+from .outputs.formatters import (fmt_argument_as_cpp_type, fmt_docstring,
+        fmt_docstring_of_overload)
+from .parser import (InvalidAnnotation, validate_boolean, validate_integer,
+        validate_string_list, validate_string)
+from .specification import DocstringSignature
+
+
 class BuildSystemExtension:
     """ The base class for a build system extension. """
 
@@ -42,8 +49,6 @@ class BuildSystemExtension:
     def parse_boolean_annotation(name, raw_value, location):
         """ Parse and return the valid value of a boolean annotation. """
 
-        from .parser import InvalidAnnotation, validate_boolean
-
         pm, p, symbol = location
 
         try:
@@ -57,8 +62,6 @@ class BuildSystemExtension:
     @staticmethod
     def parse_integer_annotation(name, raw_value, location):
         """ Parse and return the valid value of an integer annotation. """
-
-        from .parser import InvalidAnnotation, validate_integer
 
         pm, p, symbol = location
 
@@ -75,8 +78,6 @@ class BuildSystemExtension:
     def parse_string_annotation(name, raw_value, location):
         """ Parse and return the valid value of a string annotation. """
 
-        from .parser import InvalidAnnotation, validate_string
-
         pm, p, symbol = location
 
         try:
@@ -90,8 +91,6 @@ class BuildSystemExtension:
     @staticmethod
     def parse_string_list_annotation(name, raw_value, location):
         """ Parse and return the valid value of a string list annotation. """
-
-        from .parser import InvalidAnnotation, validate_string_list
 
         pm, p, symbol = location
 
@@ -118,8 +117,6 @@ class BuildSystemExtension:
         leading global scope is removed.
         """
 
-        from .outputs.formatters import fmt_argument_as_cpp_type
-
         return fmt_argument_as_cpp_type(self._spec, argument,
                 scope=scope.iface_file, strip=strip)
 
@@ -128,6 +125,35 @@ class BuildSystemExtension:
         """ Returns True if the argument is optional. """
 
         return argument.default_value is not None
+
+    def query_function_default_docstring(self, function):
+        """ Return the function's default (ie. automatically generated)
+        docstring.
+        """
+
+        return fmt_docstring_of_overload(self._spec, function)
+
+    @staticmethod
+    def query_function_default_docstring_is_appended(self):
+        """ Returns True the function's default (ie. automatically generated)
+        docstring should be appended.
+        """
+
+        return function.docstring.signature is DocstringSignature.APPENDED
+
+    @staticmethod
+    def query_function_default_docstring_is_prepended():
+        """ Returns True the function's default (ie. automatically generated)
+        docstring should be prepended.
+        """
+
+        return function.docstring.signature is DocstringSignature.PREPENDED
+
+    @staticmethod
+    def query_function_docstring(function):
+        """ Return the function's docstring or None if it doesn't have one. """
+
+        return None if function.docstring is None else fmt_docstring(function.docstring)
 
     @staticmethod
     def query_class_cpp_name(klass):

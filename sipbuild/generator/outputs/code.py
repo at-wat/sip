@@ -20,7 +20,8 @@ from ..specification import (AccessSpecifier, Argument, ArgumentType,
 from ..utils import find_method, py_as_int, same_signature
 
 from .formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
-        fmt_class_as_scoped_name, fmt_copying, fmt_enum_as_cpp_type,
+        fmt_class_as_scoped_name, fmt_copying, fmt_docstring,
+        fmt_docstring_of_ctor, fmt_docstring_of_overload, fmt_enum_as_cpp_type,
         fmt_scoped_py_name, fmt_signature_as_cpp_declaration,
         fmt_signature_as_cpp_definition, fmt_signature_as_type_hint,
         fmt_value_list_as_cpp_expression)
@@ -5621,7 +5622,7 @@ static sipPySlotDef slots_{klass_name}[] = {{
         nr_variables += 1
 
         if prop.docstring is not None:
-            docstring = _docstring_text(prop.docstring)
+            docstring = fmt_docstring(prop.docstring)
             sf.write(f'\nPyDoc_STRVAR(doc_{klass_name}_{prop.name}, "{docstring}");\n')
 
     # The variables table.
@@ -6042,17 +6043,17 @@ def _pyqt_signal_table_entry(sf, spec, bindings, klass, signal, member_nr):
 
         if signal.docstring is not None:
             if signal.docstring.signature is DocstringSignature.PREPENDED:
-                _overload_auto_docstring(sf, spec, signal)
+                sf.write(fmt_docstring_of_overload(spec, signal))
                 sf.write('\\n')
 
-            sf.write(_docstring_text(signal.docstring))
+            sf.write(fmt_docstring(signal.docstring))
 
             if signal.docstring.signature is DocstringSignature.APPENDED:
                 sf.write('\\n')
-                _overload_auto_docstring(sf, spec, signal)
+                sf.write(fmt_docstring_of_overload(spec, signal))
         else:
             sf.write('\\1')
-            _overload_auto_docstring(sf, spec, signal)
+            sf.write(fmt_docstring_of_overload(spec, signal))
 
         sf.write('", ')
     else:
@@ -8386,7 +8387,7 @@ def _member_docstring(sf, spec, bindings, member, overloads, is_method=False):
                 _member_auto_docstring(sf, spec, bindings, overload, is_method)
                 sf.write(NEWLINE)
 
-            sf.write(_docstring_text(overload.docstring))
+            sf.write(fmt_docstring(overload.docstring))
 
             if overload.docstring.signature is DocstringSignature.APPENDED:
                 sf.write(NEWLINE)
@@ -8405,7 +8406,8 @@ def _member_auto_docstring(sf, spec, bindings, overload, is_method):
     """ Generate the automatic docstring for a function/method. """
 
     if bindings.docstrings:
-        _overload_auto_docstring(sf, spec, overload, is_method=is_method)
+        sf.write(
+                fmt_docstring_of_overload(spec, overload, is_method=is_method))
 
 
 def _has_class_docstring(bindings, klass):
@@ -8458,7 +8460,7 @@ def _class_docstring(sf, spec, bindings, klass):
         sf.write('\\1')
 
     if klass.docstring is not None and klass.docstring.signature is not DocstringSignature.PREPENDED:
-        sf.write(_docstring_text(klass.docstring))
+        sf.write(fmt_docstring(klass.docstring))
         is_first = False
     else:
         is_first = True
@@ -8482,7 +8484,7 @@ def _class_docstring(sf, spec, bindings, klass):
                     _ctor_auto_docstring(sf, spec, bindings, klass, ctor)
                     sf.write(NEWLINE)
 
-                sf.write(_docstring_text(ctor.docstring))
+                sf.write(fmt_docstring(ctor.docstring))
 
                 if ctor.docstring.signature is DocstringSignature.APPENDED:
                     sf.write(NEWLINE)
@@ -8497,43 +8499,14 @@ def _class_docstring(sf, spec, bindings, klass):
             sf.write(NEWLINE)
             sf.write(NEWLINE)
 
-        sf.write(_docstring_text(klass.docstring))
+        sf.write(fmt_docstring(klass.docstring))
 
 
 def _ctor_auto_docstring(sf, spec, bindings, klass, ctor):
     """ Generate the automatic docstring for a ctor. """
 
     if bindings.docstrings:
-        py_name = fmt_scoped_py_name(klass.scope, klass.py_name.name)
-        signature = fmt_signature_as_type_hint(spec, ctor.py_signature,
-                need_self=False, exclude_result=True)
-        sf.write(py_name + signature)
-
-
-def _docstring_text(docstring):
-    """ Return the text of a docstring. """
-
-    text = docstring.text
-
-    # Remove any single trailing newline.
-    if text.endswith('\n'):
-        text = text[:-1]
-
-    s = ''
-
-    for ch in text:
-        if ch == '\n':
-            # Let the compiler concatanate lines.
-            s += '\\n"\n"'
-        elif ch in r'\"':
-            s += '\\'
-            s += ch
-        elif ch.isprintable():
-            s += ch
-        else:
-            s += f'\\{ord(ch):03o}'
-
-    return s
+        sf.write(fmt_docstring_of_ctor(spec, ctor, klass))
 
 
 def _module_docstring(sf, module):
@@ -8542,7 +8515,7 @@ def _module_docstring(sf, module):
     if module.docstring is not None:
         sf.write(
 f'''
-"PyDoc_STRVAR(doc_mod_{module.py_name}, "{_docstring_text(module.docstring)}");
+"PyDoc_STRVAR(doc_mod_{module.py_name}, "{fmt_docstring(module.docstring)}");
 ''')
 
 
@@ -8843,15 +8816,6 @@ def _qualifier_enabled(qualifier, bindings):
             return qualifier.enabled_by_default
 
     return False
-
-
-def _overload_auto_docstring(sf, spec, overload, is_method=True):
-    """ Generate the docstring for a single API overload. """
-
-    need_self = is_method and not overload.is_static
-    signature = fmt_signature_as_type_hint(spec, overload.py_signature,
-            need_self=need_self)
-    sf.write(overload.common.py_name.name + signature)
 
 
 def _sequence_support(sf, spec, klass, overload):

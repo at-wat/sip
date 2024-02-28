@@ -111,6 +111,24 @@ class BuildSystemExtension:
 
         pm.parser_error(p, symbol, error_message)
 
+    def query_argument_cpp_decl(self, argument, scope, strip=0):
+        """ Returns the C++ declaration of an argument within a specific scope.
+        If the name of the argument type contains scopes then 'strip' specifies
+        the number of leading scopes to be removed.  If it is -1 then only the
+        leading global scope is removed.
+        """
+
+        from .outputs.formatters import fmt_argument_as_cpp_type
+
+        return fmt_argument_as_cpp_type(self._spec, argument,
+                scope=scope.iface_file, strip=strip)
+
+    @staticmethod
+    def query_argument_is_optional(argument):
+        """ Returns True if the argument is optional. """
+
+        return argument.default_value is not None
+
     @staticmethod
     def query_class_cpp_name(klass):
         """ Return the fully qualified C++ name of a class. """
@@ -153,15 +171,11 @@ class BuildSystemExtension:
 
         return False
 
-    def query_function_arguments(self, function):
-        """ Return a sequence of 5-tuples for each of the functions arguments.
-        The 1st element is True if const, the 2nd element is the name of the
-        C++ type, the 3rd element is the dereference string, the 4th element is
-        True if a reference, and the 5th element is the optional default value.
-        """
+    @staticmethod
+    def query_function_cpp_arguments(function):
+        """ Return a sequence of the C++ arguments of a function. """
 
-        # XXX - needs more sophistication
-        return ()
+        return function.cpp_signature.args
 
     @staticmethod
     def query_function_cpp_name(function):

@@ -1222,7 +1222,7 @@ def p_plugin(p):
         return
 
     # %Plugin is incompatible with build system extensions.
-    if pm.bindings.project.build_system_extensions:
+    if pm.bindings.build_system_extensions:
         pm.parser_error(p, 1,
                 "%Plugin cannot be used with build system extensions")
 
@@ -2074,7 +2074,7 @@ def p_method_variable(p):
         item = p[1]
 
     if extension_keyword is not None:
-        for extension in pm.bindings.project.build_system_extensions:
+        for extension in pm.bindings.build_system_extensions:
             if extension.parse_function_keyword(item, extension_keyword):
                 break
         else:
@@ -2111,7 +2111,7 @@ def p_access_specifier(p):
         return
 
     # Allow build system extensions to complete the parsing.
-    for extension in pm.bindings.project.build_system_extensions:
+    for extension in pm.bindings.build_system_extensions:
         primary = extension.parse_class_access_specifier(pm.scope, p[1], p[2])
         if primary is not None:
             break

@@ -23,7 +23,7 @@ from ..utils import (append_iface_file, argument_as_str, cached_name,
         same_signature, search_typedefs)
 
 
-def resolve(spec, modules, project):
+def resolve(spec, modules, bindings):
     """ Resolve all types of a parsed specification and create additional views
     so that code can be generated.
     """
@@ -145,7 +145,7 @@ def resolve(spec, modules, project):
         _check_helpers(spec, klass)
         _check_properties(klass, error_log)
 
-        project.call_build_system_extensions('complete_class_definition',
+        bindings.call_build_system_extensions('complete_class_definition',
                 klass)
 
     # Number the exceptions as they will be seen by the main module.

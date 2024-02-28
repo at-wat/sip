@@ -1255,9 +1255,6 @@ class Specification:
     # The version of the ABI being targeted.
     abi_version: tuple
 
-    # Set if the specification is strict.
-    is_strict: bool
-
     # The fully qualified name of the sip module.  If it is None then there is
     # no shared sip module.
     sip_module: Optional[str]
@@ -1288,6 +1285,9 @@ class Specification:
 
     # Set if the specification is for a composite module.
     is_composite: bool = False
+
+    # Set if the specification is strict.
+    is_strict: bool = True
 
     # The mapped type templates.
     mapped_type_templates: List[MappedTypeTemplate] = field(default_factory=list)

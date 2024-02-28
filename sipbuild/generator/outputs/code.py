@@ -26,7 +26,7 @@ from .formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
         fmt_value_list_as_cpp_expression)
 
 
-def output_code(spec, bindings, project, buildable):
+def output_code(spec, bindings, buildable):
     """ Output the C/C++ code and add it to the given buildable. """
 
     module = spec.module
@@ -35,13 +35,13 @@ def output_code(spec, bindings, project, buildable):
         source_name = os.path.join(buildable.build_dir,
                 'sip' + module.py_name + 'cmodule.c')
 
-        with CompilationUnit(source_name, "Composite module code.", module, project, buildable, sip_api_file=False) as sf:
-            _composite_module_code(sf, spec, project.py_debug)
+        with CompilationUnit(source_name, "Composite module code.", module, bindings, buildable, sip_api_file=False) as sf:
+            _composite_module_code(sf, spec, bindings.project.py_debug)
     else:
-        _module_code(spec, bindings, project, buildable)
+        _module_code(spec, bindings, buildable)
 
 
-def _internal_api_header(sf, spec, bindings, project, name_cache_list):
+def _internal_api_header(sf, spec, bindings, name_cache_list):
     """ Generate the C++ internal module API header file and return its path
     name.
     """
@@ -55,7 +55,7 @@ f'''#ifndef _{module_name}API_H
 #define _{module_name}API_H
 ''')
 
-    _declare_limited_api(sf, project.py_debug, module=module)
+    _declare_limited_api(sf, bindings.project.py_debug, module=module)
     _include_sip_h(sf, module)
 
     # XXX
@@ -353,7 +353,7 @@ extern sipExportedModuleDef sipModuleAPI_{module_name};
 
     # Add code from any build system extensions.
     sip_api_h_code = []
-    project.call_build_system_extensions('append_sip_api_h_code',
+    bindings.call_build_system_extensions('append_sip_api_h_code',
             sip_api_h_code)
     if sip_api_h_code:
         sf.write('\n' + '\n'.join(sip_api_h_code))
@@ -452,7 +452,7 @@ f'    sip_import_component_module(sipModuleDict, "{mod.fq_py_name}");\n')
 ''')
 
 
-def _module_code(spec, bindings, project, buildable):
+def _module_code(spec, bindings, buildable):
     """ Generate the C/C++ code for a module. """
 
     module = spec.module
@@ -480,7 +480,7 @@ def _module_code(spec, bindings, project, buildable):
         source_name = os.path.join(buildable.build_dir,
                 'sip' + module_name + 'cmodule' + source_suffix)
 
-    sf = CompilationUnit(source_name, "Module code.", module, project,
+    sf = CompilationUnit(source_name, "Module code.", module, bindings,
             buildable)
 
     # Include the library headers for types used by virtual handlers, module
@@ -515,7 +515,7 @@ def _module_code(spec, bindings, project, buildable):
                     source_name = _make_part_name(buildable, module_name,
                             this_part, source_suffix)
                     sf = CompilationUnit(source_name, "Module code.", module,
-                            project, buildable)
+                            bindings, buildable)
 
                     need_postinc = True
                 else:
@@ -526,7 +526,7 @@ def _module_code(spec, bindings, project, buildable):
                     # than create one of its own.
                     use_sf = sf
 
-            _iface_file_cpp(spec, bindings, project, buildable, iface_file,
+            _iface_file_cpp(spec, bindings, buildable, iface_file,
                     need_postinc, source_suffix, extension_data, use_sf)
 
 
@@ -1293,8 +1293,8 @@ f'''
 
     header_name = os.path.join(buildable.build_dir, f'sipAPI{module_name}.h')
 
-    with SourceFile(header_name, "Internal module API header file.", module, project, buildable.headers) as sf:
-        _internal_api_header(sf, spec, bindings, project, name_cache_list)
+    with SourceFile(header_name, "Internal module API header file.", module, bindings, buildable.headers) as sf:
+        _internal_api_header(sf, spec, bindings, name_cache_list)
 
 
 def _name_cache_as_list(name_cache):
@@ -2105,8 +2105,8 @@ def _empty_iface_file(spec, iface_file):
     return True
 
 
-def _iface_file_cpp(spec, bindings, project, buildable, iface_file,
-        need_postinc, source_suffix, extension_data, sf):
+def _iface_file_cpp(spec, bindings, buildable, iface_file, need_postinc,
+        source_suffix, extension_data, sf):
     """ Generate the C/C++ code for an interface. """
 
     # Check that there will be something in the file so that we don't get
@@ -2127,7 +2127,7 @@ def _iface_file_cpp(spec, bindings, project, buildable, iface_file,
         source_name += source_suffix
 
         sf = CompilationUnit(source_name, "Interface wrapper code.",
-                iface_file.module, project, buildable)
+                iface_file.module, bindings, buildable)
 
         need_postinc = True
 
@@ -2149,21 +2149,19 @@ def _iface_file_cpp(spec, bindings, project, buildable, iface_file,
             continue
 
         if klass.iface_file is iface_file:
-            _class_cpp(sf, spec, bindings, project, klass, extension_data)
+            _class_cpp(sf, spec, bindings, klass, extension_data)
 
             # Generate any enclosed protected classes.
             for proto_klass in spec.classes:
                 if proto_klass.is_protected and proto_klass.scope is klass:
-                    _class_cpp(sf, spec, bindings, project, proto_klass,
-                            extension_data)
+                    _class_cpp(sf, spec, bindings, proto_klass, extension_data)
 
     for mapped_type in spec.mapped_types:
         if mapped_type.iface_file is iface_file:
-            _mapped_type_cpp(sf, spec, bindings, project, mapped_type,
-                    extension_data)
+            _mapped_type_cpp(sf, spec, bindings, mapped_type, extension_data)
 
 
-def _mapped_type_cpp(sf, spec, bindings, project, mapped_type, extension_data):
+def _mapped_type_cpp(sf, spec, bindings, mapped_type, extension_data):
     """ Generate the C++ code for a mapped type version. """
 
     mapped_type_name = mapped_type.iface_file.fq_cpp_name.as_word
@@ -2307,7 +2305,7 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
 
     # Generate any build system extension data for the mapped type and add to
     # the list of all extension data.
-    for extension in project.build_system_extensions:
+    for extension in bindings.build_system_extensions:
         mapped_type_extension_name = f'extension_data_{extension.name}_{mapped_type_name}'
         code = []
         extension.append_mapped_type_extension_code(mapped_type,
@@ -2396,11 +2394,11 @@ f'''        0, SIP_NULLPTR,
 ''')
 
 
-def _class_cpp(sf, spec, bindings, project, klass, extension_data):
+def _class_cpp(sf, spec, bindings, klass, extension_data):
     """ Generate the C++ code for a class. """
 
     sf.write_code(klass.type_code)
-    _class_functions(sf, spec, bindings, klass, project.py_debug)
+    _class_functions(sf, spec, bindings, klass)
     _access_functions(sf, spec, scope=klass)
 
     if klass.iface_file.type is not IfaceFileType.NAMESPACE:
@@ -2428,7 +2426,7 @@ f'''static PyObject *convertFrom_{name}(void *sipCppV, PyObject *{xfer})
 
             sf.write('}\n')
 
-    _type_definition(sf, spec, bindings, project, klass, extension_data)
+    _type_definition(sf, spec, bindings, klass, extension_data)
 
 
 def _get_function_table(members):
@@ -3411,7 +3409,7 @@ f'''
     sf.write('}\n')
 
 
-def _class_functions(sf, spec, bindings, klass, py_debug):
+def _class_functions(sf, spec, bindings, klass):
     """ Generate the member functions for a class. """
 
     as_word = klass.iface_file.fq_cpp_name.as_word
@@ -3612,7 +3610,7 @@ f'''static int clear_{as_word}(void *sipCppV)
 
         sf.write('\n\n')
 
-        if not py_debug and spec.module.use_limited_api:
+        if not bindings.project.py_debug and spec.module.use_limited_api:
             if not spec.c_bindings:
                 sf.write(f'extern "C" {{static int getbuffer_{as_word}(PyObject *, void *, sipBufferDef *);}}\n')
 
@@ -3643,7 +3641,7 @@ f'''static int clear_{as_word}(void *sipCppV)
 
         sf.write('\n\n')
 
-        if not py_debug and spec.module.use_limited_api:
+        if not bindings.project.py_debug and spec.module.use_limited_api:
             if not spec.c_bindings:
                 sf.write(f'extern "C" {{static void releasebuffer_{as_word}(PyObject *, void *);}}\n')
 
@@ -5548,7 +5546,7 @@ def _argument_variable(sf, spec, scope, arg, arg_nr):
                 sf.write(f'        PyObject *{arg_name}Keep{supporting_default_value};\n')
 
 
-def _type_definition(sf, spec, bindings, project, klass, extension_data):
+def _type_definition(sf, spec, bindings, klass, extension_data):
     """ Generate the type structure that contains all the information needed by
     the meta-type.  A sub-set of this is used to extend namespaces.
     """
@@ -5701,7 +5699,7 @@ static sipPySlotDef slots_{klass_name}[] = {{
         docstring_ref = 'SIP_NULLPTR'
 
     # Generate any build system extension data structures.
-    for extension in project.build_system_extensions:
+    for extension in bindings.build_system_extensions:
         klass_extension_name = f'extension_data_{extension.name}_{klass_name}'
         code = []
         extension.append_class_extension_code(klass, klass_extension_name,
@@ -5746,7 +5744,7 @@ static sipPySlotDef slots_{klass_name}[] = {{
     if module.call_super_init:
         flags.append('SIP_TYPE_SUPER_INIT')
 
-    if not project.py_debug and module.use_limited_api:
+    if not bindings.project.py_debug and module.use_limited_api:
         flags.append('SIP_TYPE_LIMITED_API')
 
     flags.append('SIP_TYPE_NAMESPACE' if klass.iface_file.type is IfaceFileType.NAMESPACE else 'SIP_TYPE_CLASS')
@@ -9079,13 +9077,13 @@ def _write_instances_table(sf, scope, instances, declaration_template):
 class SourceFile:
     """ The encapsulation of a source file. """
 
-    def __init__(self, source_name, description, module, project, generated):
+    def __init__(self, source_name, description, module, bindings, generated):
         """ Initialise the object. """
 
         self._description = description
         self._module = module
 
-        self.open(source_name, project)
+        self.open(source_name, bindings)
 
         generated.append(source_name)
 
@@ -9104,7 +9102,7 @@ class SourceFile:
 
         self._f.close()
 
-    def open(self, source_name, project):
+    def open(self, source_name, bindings):
         """ Open a source file and make it current. """
 
         self._f = open(source_name, 'w', encoding='UTF-8')
@@ -9112,7 +9110,7 @@ class SourceFile:
         self._line_nr = 1
 
         self._write_header_comments(self._description, self._module,
-                project.version_info)
+                bindings.project.version_info)
 
     def write(self, s):
         """ Write a string while tracking the current line number. """
@@ -9164,11 +9162,11 @@ f'''/*
 class CompilationUnit(SourceFile):
     """ Encapsulate a compilation unit, ie. a C or C++ source file. """
 
-    def __init__(self, source_name, description, module, project, buildable,
+    def __init__(self, source_name, description, module, bindings, buildable,
             sip_api_file=True):
         """ Initialise the object. """
 
-        super().__init__(source_name, description, module, project,
+        super().__init__(source_name, description, module, bindings,
                 buildable.sources)
 
         self.write_code(module.unit_code)

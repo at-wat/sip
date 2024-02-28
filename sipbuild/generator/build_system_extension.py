@@ -6,11 +6,13 @@
 class BuildSystemExtension:
     """ The base class for a build system extension. """
 
-    def __init__(self, name, project):
+    def __init__(self, name, bindings, spec):
         """ Initialise the extension. """
 
         self.name = name
-        self.project = project
+        self.bindings = bindings
+
+        self._spec = spec
 
     def get_extension_data(self, extendable, factory=None):
         """ Return the build system extension-specific extension data for an

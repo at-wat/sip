@@ -35,15 +35,14 @@ class ParserManager:
     with state and utility functions.
     """
 
-    def __init__(self, bindings, hex_version, encoding, abi_version,
-            include_dirs, sip_module, is_strict):
+    def __init__(self, spec, bindings, hex_version, encoding, include_dirs):
         """ Initialise the manager. """
 
         # Get any extension keywords.
         self._ext_access_specifiers = []
         self._ext_function_keywords = []
 
-        for extension in bindings.project.build_system_extensions:
+        for extension in bindings.build_system_extensions:
             self._ext_access_specifiers.extend(
                     extension.get_class_access_specifier_keywords())
             self._ext_function_keywords.extend(
@@ -65,11 +64,8 @@ class ParserManager:
         self.class_templates = []
 
         # Public state.
+        self.spec = spec
         self.bindings = bindings
-
-        self.spec = Specification(
-                tuple([int(v) for v in abi_version.split('.')]), is_strict,
-                sip_module)
 
         # The module is initially unnamed.
         self.modules = [self.spec.module]
@@ -822,8 +818,8 @@ class ParserManager:
             self._add_auto_slot(p, symbol, annotations, '__imatmul__',
                     py_signature, overload.cpp_signature, overload.method_code)
 
-        self.bindings.project.call_build_system_extensions(
-                'complete_function_parse', overload,
+        self.bindings.call_build_system_extensions('complete_function_parse',
+                overload,
                 self.scope if isinstance(self.scope, WrappedClass) else None)
 
     def add_mapped_type(self, p, symbol, mapped_type, cpp_type, annotations):
@@ -1527,7 +1523,7 @@ class ParserManager:
         for klass in self._template_arg_classes:
             self.spec.classes.remove(klass)
 
-        return self.spec, self.modules, self._sip_files
+        return self.modules, self._sip_files
 
     def parser_error(self, p, symbol, text):
         """ Record an error caused by a symbol in a production. """
@@ -1704,7 +1700,7 @@ class ParserManager:
         annotations = {}
 
         for p, symbol, name, raw_value in raw_annotations:
-            for extension in self.bindings.project.build_system_extensions:
+            for extension in self.bindings.build_system_extensions:
                 if getattr(extension, extension_method)(extendable, name, raw_value, (self, p, symbol)):
                     break
             else:

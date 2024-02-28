@@ -148,7 +148,7 @@ class Project(AbstractProject, Configurable):
         self.arguments = None
         self.bindings = collections.OrderedDict()
         self.bindings_factories = []
-        self.build_system_extensions = []
+        self.build_system_extension_factories = {}
         self.builder = None
         self.buildables = []
         self.installables = []
@@ -247,14 +247,6 @@ class Project(AbstractProject, Configurable):
         self._remove_build_dir()
 
         return wheel_file
-
-    def call_build_system_extensions(self, method_name, *args):
-        """ Call an extension method for all registered build system
-        extensions.
-        """
-
-        for extension in self.build_system_extensions:
-            getattr(extension, method_name)(*args)
 
     def get_bindings_dir(self):
         """ Return the name of the 'bindings' directory relative to the
@@ -551,9 +543,8 @@ class Project(AbstractProject, Configurable):
         """ Register a build system extension. """
 
         # Sanity check the name.
-        for extension in self.build_system_extensions:
-            if extension.name == name:
-                raise UserException(
+        if name in self.build_system_extension_factories:
+            raise UserException(
                     "A build system extension called '{0}' has already been registered".format(name))
 
         # Sanity check the extension.
@@ -561,8 +552,7 @@ class Project(AbstractProject, Configurable):
             raise UserException(
                     "The build system extension must be a sub-class of sipbuild.BuildSystemExtension")
 
-        self.build_system_extensions.append(
-                build_system_extension_factory(name, self))
+        self.build_system_extension_factories[name] = build_system_extension_factory
 
     def run_command(self, args, *, fatal=True):
         """ Run a command and display the output if requested. """

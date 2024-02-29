@@ -353,11 +353,7 @@ extern sipExportedModuleDef sipModuleAPI_{module_name};
             sf.write(f'extern sipImportedExceptionDef sipImportedExceptions_{module_name}_{imported_module_name}[];\n')
 
     # Add code from any build system extensions.
-    sip_api_h_code = []
-    bindings.call_build_system_extensions('append_sip_api_h_code',
-            sip_api_h_code)
-    if sip_api_h_code:
-        sf.write('\n' + '\n'.join(sip_api_h_code))
+    bindings.call_build_system_extensions('write_sip_api_h_code', sf)
 
     # XXX
     if _pyqt5(spec) or _pyqt6(spec):
@@ -2308,12 +2304,7 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
     # the list of all extension data.
     for extension in bindings.build_system_extensions:
         mapped_type_extension_name = f'extension_data_{extension.name}_{mapped_type_name}'
-        code = []
-        extension.append_mapped_type_extension_code(mapped_type,
-                mapped_type_extension_name, code)
-
-        if code:
-            sf.write('\n\n' + '\n'.join(code))
+        if extension.write_mapped_type_extension_code(sf, mapped_type, mapped_type_extension_name):
             extension_data.append(
                     (mapped_type, extension.name, mapped_type_extension_name))
 
@@ -5702,12 +5693,7 @@ static sipPySlotDef slots_{klass_name}[] = {{
     # Generate any build system extension data structures.
     for extension in bindings.build_system_extensions:
         klass_extension_name = f'extension_data_{extension.name}_{klass_name}'
-        code = []
-        extension.append_class_extension_code(klass, klass_extension_name,
-                code)
-
-        if code:
-            sf.write('\n\n' + '\n'.join(code))
+        if extension.write_class_extension_code(sf, klass, klass_extension_name):
             extension_data.append(
                     (klass, extension.name, klass_extension_name))
 
@@ -8546,7 +8532,6 @@ def _declare_limited_api(sf, py_debug, module=None):
 ''')
 
 
-# XXX - need to be able to write this code in the extension
 def _pyqt_plugin_signals_table(sf, spec, bindings, klass):
     """ Generate the PyQt signals table and return True if anything was
     generated.

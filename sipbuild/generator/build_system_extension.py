@@ -211,27 +211,6 @@ class BuildSystemExtension:
 
     # The rest of the class are the stubs to be re-implemented by sub-classes.
 
-    def append_class_extension_code(self, klass, name, code):
-        """ Append code fragments that implements a class extension data
-        structure.
-        """
-
-        pass
-
-    def append_mapped_type_extension_code(self, mapped_type, name, code):
-        """ Append code fragments that implements a mapped type extension data
-        structure.
-        """
-
-        pass
-
-    def append_sip_api_h_code(self, code):
-        """ Append code fragments to be included in all generated sipAPI*.h
-        files.
-        """
-
-        pass
-
     def complete_class_definition(self, klass):
         """ Complete the definition of a class. """
 
@@ -331,3 +310,22 @@ class BuildSystemExtension:
         """ Parse a variable annotation.  Return True if it was parsed. """
 
         return False
+
+    def write_class_extension_code(self, output, klass, name):
+        """ Write code that implements a class extension data structure.
+        Return True if something was written.
+        """
+
+        return False
+
+    def write_mapped_type_extension_code(self, output, mapped_type, name):
+        """ Write code that implements a mapped type extension data structure.
+        Return True if something was written.
+        """
+
+        return False
+
+    def write_sip_api_h_code(self, output):
+        """ Write code to be included in all generated sipAPI*.h files. """
+
+        pass

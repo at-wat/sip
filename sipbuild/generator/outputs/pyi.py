@@ -7,7 +7,7 @@ from ...version import SIP_VERSION_STR
 
 from ..python_slots import is_number_slot, reflected_slot
 from ..specification import (AccessSpecifier, ArgumentType, ArrayArgument,
-        EnumBaseType, IfaceFileType, PyQtMethodSpecifier, PySlot, Signature)
+        EnumBaseType, IfaceFileType, PySlot, Signature)
 from ..utils import append_iface_file, find_method
 
 from .formatters import (fmt_argument_as_type_hint, fmt_class_as_type_hint,
@@ -438,7 +438,7 @@ def _callable(pf, spec, member, overloads, defined, is_method=False, indent=0):
         # 'typing.overload' cannot be used with ClassVar.  We choose to
         # generate a type hint for the signal rather than any method.
         # XXX - ???
-        if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
+        if overload.pyqt_is_signal:
             scope = '' if spec.module.py_name == 'QtCore' else 'QtCore.'
 
             s = _indent(indent)

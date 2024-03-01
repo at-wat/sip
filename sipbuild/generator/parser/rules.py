@@ -7,10 +7,10 @@ from ..scoped_name import ScopedName
 from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, ClassKey, Constructor, Docstring, DocstringFormat,
         Extract, FunctionCall, IfaceFile, IfaceFileType, KwArgs, License,
-        MappedType, MappedTypeTemplate, Overload, Property,
-        PyQtMethodSpecifier, QualifierType, Signature, Template,
-        ThrowArguments, Value, ValueType, VirtualErrorHandler, WrappedEnum,
-        WrappedEnumMember, WrappedTypedef, WrappedVariable)
+        MappedType, MappedTypeTemplate, Overload, Property, QualifierType,
+        Signature, Template, ThrowArguments, Value, ValueType,
+        VirtualErrorHandler, WrappedEnum, WrappedEnumMember, WrappedTypedef,
+        WrappedVariable)
 from ..templates import same_template_signature
 from ..utils import cached_name, normalised_scoped_name, search_typedefs
 
@@ -2082,10 +2082,9 @@ def p_method_variable(p):
 
             if pm.spec.plugins:
                 if extension_keyword == 'Q_SIGNAL':
-                    item.pyqt_method_specifier = PyQtMethodSpecifier.SIGNAL
+                    item.pyqt_is_signal = True
                     keyword_handled = True
                 elif extension_keyword == 'Q_SLOT':
-                    item.pyqt_method_specifier = PyQtMethodSpecifier.SLOT
                     keyword_handled = True
 
             if not keyword_handled:
@@ -2118,15 +2117,14 @@ def p_access_specifier(p):
     else:
         # See if it is a standard C++ access specifier.
         if p[1] in ('public', 'protected', 'private') and p[2] is None:
-            pm.scope_pyqt_method_specifier = None
+            pm.scope_pyqt_are_signals = False
             primary = p[1]
         elif pm.spec.plugins:
             # See if it is a legacy plugin.
             if p[1] in ('signals', 'Q_SIGNALS') and p[2] == None:
-                pm.scope_pyqt_method_specifier = PyQtMethodSpecifier.SIGNAL
+                pm.scope_pyqt_are_signals = True
                 primary = 'public'
             elif p[1] in ('public', 'protected', 'private') and p[2] in ('slots', 'Q_SLOTS'):
-                pm.scope_pyqt_method_specifier = PyQtMethodSpecifier.SLOT
                 primary = p[1]
             else:
                 primary = None

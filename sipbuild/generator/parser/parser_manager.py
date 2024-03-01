@@ -17,9 +17,8 @@ from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, CachedName, ClassKey, CodeBlock, Constructor,
         DocstringFormat, DocstringSignature, EnumBaseType, GILAction,
         IfaceFile, IfaceFileType, KwArgs, MappedType, Member, Module, Overload,
-        PyQtMethodSpecifier, PySlot, Qualifier, QualifierType, Signature,
-        SourceLocation, Specification, Transfer, TypeHints, WrappedClass,
-        WrappedException)
+        PySlot, Qualifier, QualifierType, Signature, SourceLocation,
+        Specification, Transfer, TypeHints, WrappedClass, WrappedException)
 from ..templates import encoded_template_name, same_template_signature
 from ..utils import (argument_as_str, cached_name, find_iface_file,
         normalised_scoped_name, same_base_type)
@@ -457,10 +456,6 @@ class ParserManager:
             self.parser_error(p, symbol,
                     "constructors with arguments in C modules must specify %MethodCode")
 
-        if self.scope_pyqt_method_specifier is not None:
-            self.parser_error(p, symbol,
-                    "constructors must be in the public, protected or private sections")
-
         # Handle the access specifier.
         access_specifier = self.scope_access_specifier
 
@@ -536,10 +531,6 @@ class ParserManager:
         if bool(self.c_bindings) and method_code is None:
             self.parser_error(p, symbol,
                     "destructors in C modules must specify %MethodCode")
-
-        if self.scope_pyqt_method_specifier is not None:
-            self.parser_error(p, symbol,
-                    "destructors must be in the public, protected or private sections")
 
         if self.parsing_virtual:
             if self.scope.class_key is ClassKey.UNION:
@@ -688,7 +679,7 @@ class ParserManager:
         else:
             self.scope.overloads.append(overload)
 
-        overload.pyqt_method_specifier = self.scope_pyqt_method_specifier
+        overload.pyqt_is_signal = self.scope_pyqt_are_signals
 
         if overload.access_specifier is AccessSpecifier.PROTECTED and self.bindings.protected_is_public:
             overload.access_specifier = AccessSpecifier.PUBLIC
@@ -700,7 +691,7 @@ class ParserManager:
 
         if overload.access_specifier is AccessSpecifier.PUBLIC:
             # XXX - add extension call to force the generation of a "derived class"
-            if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
+            if overload.pyqt_is_signal:
                 self.scope.needs_shadow = True
 
         overload.is_delattr = (py_name == '__delattr__')
@@ -749,7 +740,7 @@ class ParserManager:
                 # module then we need to make sure that any other overloads'
                 # keyword argument names are marked as used.
                 # XXX - need a way to filter functions
-                if overload.pyqt_method_specifier is not PyQtMethodSpecifier.SIGNAL and overload.access_specifier is AccessSpecifier.PROTECTED and not self.in_main_module:
+                if not overload.pyqt_is_signal and overload.access_specifier is AccessSpecifier.PROTECTED and not self.in_main_module:
                     for kwod in self.scope.overloads:
                         if kwod.common is not member:
                             continue
@@ -1673,16 +1664,16 @@ class ParserManager:
         self._scope_stack[-1].access_specifier = access_specifier
 
     @property
-    def scope_pyqt_method_specifier(self):
-        """ The current method specifier. """
+    def scope_pyqt_are_signals(self):
+        """ Set if the current access specifier denotes Qt signals. """
 
-        return None if len(self._scope_stack) == 0 else self._scope_stack[-1].pyqt_method_specifier
+        return None if len(self._scope_stack) == 0 else self._scope_stack[-1].pyqt_are_signals
 
-    @scope_pyqt_method_specifier.setter
-    def scope_pyqt_method_specifier(self, pyqt_method_specifier):
+    @scope_pyqt_are_signals.setter
+    def scope_pyqt_are_signals(self, are_signals):
         """ Set the current method specifier. """
 
-        self._scope_stack[-1].pyqt_method_specifier = pyqt_method_specifier
+        self._scope_stack[-1].pyqt_are_signals = are_signals
 
     @property
     def skipping(self):
@@ -1743,10 +1734,6 @@ class ParserManager:
 
         if overload.is_static:
             cpp_only("static struct/union data members")
-
-            # XXX - need an extension call to query if a function is static
-            if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
-                error("signals cannot be static")
 
         if overload.throw_args is not None:
             cpp_only("exceptions")
@@ -2174,7 +2161,7 @@ class ScopeState:
 
         self.scope = scope
         self.access_specifier = access_specifier
-        self.pyqt_method_specifier = None
+        self.pyqt_are_signals = False
 
 
 class UnexpectedEOF(Exception):

@@ -15,8 +15,8 @@ from ..python_slots import (is_hash_return_slot, is_inplace_number_slot,
 from ..scoped_name import STRIP_GLOBAL, STRIP_NONE
 from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, CodeBlock, DocstringSignature, GILAction, IfaceFileType,
-        KwArgs, MappedType, PyQtMethodSpecifier, PySlot, QualifierType,
-        Transfer, ValueType, WrappedClass, WrappedEnum)
+        KwArgs, MappedType, PySlot, QualifierType, Transfer, ValueType,
+        WrappedClass, WrappedEnum)
 from ..utils import find_method, py_as_int, same_signature
 
 from .formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
@@ -5912,7 +5912,7 @@ def _pyqt_emitters(sf, spec, klass):
         in_emitter = False
 
         for overload in klass.overloads:
-            if not (overload.common is member and overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL and _has_optional_args(overload)):
+            if not (overload.common is member and overload.pyqt_is_signal and _has_optional_args(overload)):
                 continue
 
             if not in_emitter:
@@ -6432,7 +6432,7 @@ def _skip_overload(overload, member, klass, scope, want_local=True):
 
     # Skip if it's a signal.
     # XXX - need a filtering mechanism (what is the context?)
-    if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
+    if overload.pyqt_is_signal:
         return True
 
     # Skip if it's a private abstract.
@@ -8548,13 +8548,13 @@ def _pyqt_plugin_signals_table(sf, spec, bindings, klass):
         member_nr = member.member_nr
 
         for overload in klass.overloads:
-            if overload.common is not member or overload.pyqt_method_specifier is not PyQtMethodSpecifier.SIGNAL:
+            if overload.common is not member or not overload.pyqt_is_signal:
                 continue
 
             if member_nr >= 0:
                 # See if there is a non-signal overload.
                 for non_sig in klass.overloads:
-                    if non_sig is not overload and non_sig.common is member and non_sig.pyqt_method_specifier is not PyQtMethodSpecifier.SIGNAL:
+                    if non_sig is not overload and non_sig.common is member and not non_sig.pyqt_is_signal:
                         break
                 else:
                     member_nr = -1
@@ -8865,7 +8865,7 @@ def _callable_overloads(member, overloads):
 
     for overload in overloads:
         # XXX - need a filtering mechanism, context?
-        if overload.common is member and overload.access_specifier is not AccessSpecifier.PRIVATE and overload.pyqt_method_specifier is not PyQtMethodSpecifier.SIGNAL:
+        if overload.common is member and overload.access_specifier is not AccessSpecifier.PRIVATE and not overload.pyqt_is_signal:
             yield overload
 
 

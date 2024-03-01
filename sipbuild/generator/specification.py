@@ -319,17 +319,6 @@ class KwArgs(Enum):
     OPTIONAL = auto()
 
 
-# PyQt5 and PyQt6.  Remove in SIP v7.
-class PyQtMethodSpecifier(Enum):
-    """ The PyQt-specific method specifier. """
-
-    # A signal.
-    SIGNAL = auto()
-
-    # A slot.
-    SLOT = auto()
-
-
 class PySlot(Enum):
     """ The Python slots corresponding to entries in a type object. """
 
@@ -1156,9 +1145,9 @@ class Overload(Extendable):
     # The Python signature.
     py_signature: Optional['Signature'] = None
 
-    # The PyQt method specifier.  PyQt5 and PyQt6, remove in SIP v7.
+    # Set if a Qt signal.  PyQt5 and PyQt6, remove in SIP v7.
     # XXX
-    pyqt_method_specifier: Optional[PyQtMethodSpecifier] = None
+    pyqt_is_signal: bool = False
 
     # Set if a Python exception is raised.
     raises_py_exception: bool = False

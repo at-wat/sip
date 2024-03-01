@@ -8,7 +8,7 @@ from xml.etree.ElementTree import Element, SubElement
 from ..python_slots import is_number_slot, reflected_slot
 from ..scoped_name import ScopedName, STRIP_GLOBAL
 from ..specification import (AccessSpecifier, ArgumentType, ArrayArgument,
-        IfaceFileType, KwArgs, PyQtMethodSpecifier, PySlot, Transfer)
+        IfaceFileType, KwArgs, PySlot, Transfer)
 
 from .formatters import (fmt_argument_as_rest_ref, fmt_class_as_rest_ref,
         fmt_scoped_py_name, fmt_signature_as_cpp_declaration,
@@ -186,7 +186,7 @@ def _function(parent, spec, member, overloads, scope=None):
     for overload in overloads:
         if overload.common is member and overload.access_specifier is not AccessSpecifier.PRIVATE:
             # XXX - need undocumented extension calls
-            if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
+            if overload.pyqt_is_signal:
                 attrib = {}
 
                 if _has_cpp_signature(overload.cpp_signature):
@@ -236,10 +236,6 @@ def _overload(parent, spec, scope, overload, extends, is_static):
 
     if is_static:
         attrib['static'] = '1'
-
-    # XXX - need undocumented extension calls
-    if overload.pyqt_method_specifier is PyQtMethodSpecifier.SLOT:
-        attrib['slot'] = '1'
 
     if overload.is_virtual:
         attrib['virtual'] = '1'

@@ -14,8 +14,8 @@ from ..python_slots import (is_hash_return_slot, is_int_return_slot,
 from ..scoped_name import ScopedName
 from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, ClassKey, Constructor, IfaceFileType, MappedType,
-        Member, PyQtMethodSpecifier, PySlot, Signature, Transfer, ValueType,
-        VirtualHandler, VirtualOverload, VisibleMember, WrappedClass)
+        Member, PySlot, Signature, Transfer, ValueType, VirtualHandler,
+        VirtualOverload, VisibleMember, WrappedClass)
 from ..templates import (encoded_template_name, same_template_signature,
         template_code, template_code_blocks, template_expansions)
 from ..utils import (append_iface_file, argument_as_str, cached_name,
@@ -1296,7 +1296,7 @@ def _resolve_py_signature_types(spec, mod, scope, overload, error_log,
 
     if result.type is not ArgumentType.VOID or len(result.derefs) != 0:
         # XXX - would need a complete_function_definition() extension call and a way to check the return type
-        if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
+        if overload.pyqt_is_signal:
             _log_overload_error(error_log, "is a signal and must return void",
                     overload, scope=scope)
 
@@ -1321,7 +1321,7 @@ def _resolve_py_signature_types(spec, mod, scope, overload, error_log,
 
         # Note signal arguments are restricted in their types because we don't
         # (yet) support handwritten code for them.
-        if overload.pyqt_method_specifier is PyQtMethodSpecifier.SIGNAL:
+        if overload.pyqt_is_signal:
             # XXX - would need a complete_function_definition() extension call and a way to check an argument type
             if not _supported_type(scope, overload, arg, error_log):
                 _log_overload_error(error_log,

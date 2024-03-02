@@ -43,9 +43,9 @@ class ParserManager:
 
         for extension in bindings.build_system_extensions:
             self._ext_access_specifiers.extend(
-                    extension.get_class_access_specifier_keywords())
+                    extension.class_get_access_specifier_keywords())
             self._ext_function_keywords.extend(
-                    extension.get_function_keywords())
+                    extension.function_get_keywords())
 
         # Create the lexer.
         self._lexer = lex.lex(module=tokens)
@@ -674,10 +674,12 @@ class ParserManager:
 
         for m in self.module_state.module.global_functions:
             if m is member:
-                self.module_state.module.overloads.append(overload)
+                container = self.module_state.module
                 break
         else:
-            self.scope.overloads.append(overload)
+            container = self.scope
+
+        container.overloads.append(overload)
 
         overload.pyqt_is_signal = self.scope_pyqt_are_signals
 
@@ -809,9 +811,8 @@ class ParserManager:
             self._add_auto_slot(p, symbol, annotations, '__imatmul__',
                     py_signature, overload.cpp_signature, overload.method_code)
 
-        self.bindings.call_build_system_extensions('complete_function_parse',
-                overload,
-                self.scope if isinstance(self.scope, WrappedClass) else None)
+        self.bindings.call_build_system_extensions('function_complete_parse',
+                overload, container)
 
     def add_mapped_type(self, p, symbol, mapped_type, cpp_type, annotations):
         """ Complete the implementation of a mapped type and add it to the

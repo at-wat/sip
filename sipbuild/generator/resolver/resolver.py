@@ -81,7 +81,7 @@ def resolve(spec, modules, bindings):
         _set_mro(spec, klass, error_log)
 
     # Resolve the various types in the modules.
-    _resolve_module(spec, spec.module, error_log, final_checks)
+    _resolve_module(spec, bindings, spec.module, error_log, final_checks)
 
     # Handle default ctors now that the argument types are resolved.
     for klass in spec.classes:
@@ -145,7 +145,7 @@ def resolve(spec, modules, bindings):
         _check_helpers(spec, klass)
         _check_properties(klass, error_log)
 
-        bindings.call_build_system_extensions('complete_class_definition',
+        bindings.call_build_system_extensions('class_complete_definition',
                 klass)
 
     # Number the exceptions as they will be seen by the main module.
@@ -185,7 +185,7 @@ def resolve(spec, modules, bindings):
     error_log.as_exception()
 
 
-def _resolve_module(spec, mod, error_log, final_checks, seen=None):
+def _resolve_module(spec, bindings, mod, error_log, final_checks, seen=None):
     """ Resolve a module and the modules it imports. """
 
     if seen is None:
@@ -198,12 +198,13 @@ def _resolve_module(spec, mod, error_log, final_checks, seen=None):
     # might generate new template-based types and they must be defined in the
     # right module.
     for imported_mod in mod.imports:
-        _resolve_module(spec, imported_mod, error_log, final_checks, seen=seen)
+        _resolve_module(spec, bindings, imported_mod, error_log, final_checks,
+                seen=seen)
 
     # Resolve typedefs, variables and global functions.
     _resolve_typedefs(spec, mod, error_log)
     _resolve_variables(spec, mod, error_log)
-    _resolve_scope_overloads(spec, mod.overloads, error_log, final_checks)
+    _resolve_scope_overloads(spec, bindings, mod, error_log, final_checks)
 
     # Resolve class ctors, functions and casts.
     for klass in spec.classes:
@@ -213,12 +214,12 @@ def _resolve_module(spec, mod, error_log, final_checks, seen=None):
             # Handle any dtor exceptions.
             _set_needed_exceptions(spec, mod, klass.dtor_throw_args)
 
-            _resolve_scope_overloads(spec, klass.overloads, error_log,
+            _resolve_scope_overloads(spec, bindings, klass, error_log,
                     final_checks, scope=klass)
             _transform_casts(spec, klass, error_log)
 
     # Resolve mapped types based on templates.
-    _resolve_mapped_types(spec, mod, error_log, final_checks)
+    _resolve_mapped_types(spec, bindings, mod, error_log, final_checks)
 
     seen.append(mod)
 
@@ -779,7 +780,7 @@ def _resolve_typedefs(spec, mod, error_log):
                     error_log)
 
 
-def _resolve_mapped_types(spec, mod, error_log, final_checks):
+def _resolve_mapped_types(spec, bindings, mod, error_log, final_checks):
     """ Resolve the data types for mapped types based on a template. """
 
     for mapped_type in spec.mapped_types:
@@ -787,7 +788,7 @@ def _resolve_mapped_types(spec, mod, error_log, final_checks):
             if mapped_type.type.type is ArgumentType.TEMPLATE:
                 _resolve_mapped_type_types(spec, mapped_type, error_log)
             else:
-                _resolve_scope_overloads(spec, mapped_type.overloads,
+                _resolve_scope_overloads(spec, bindings, mapped_type,
                         error_log, final_checks, scope=mapped_type)
 
 
@@ -888,11 +889,11 @@ def _add_default_copy_ctor(klass):
     klass.ctors.append(ctor)
 
 
-def _resolve_scope_overloads(spec, overloads, error_log, final_checks,
-        scope=None):
+def _resolve_scope_overloads(spec, bindings, container, error_log,
+        final_checks, scope=None):
     """ Resolve the data types for a scope's overloads. """
 
-    for overload in overloads:
+    for overload in container.overloads:
         _resolve_func_types(spec, overload.common.module, scope, overload,
                 error_log, final_checks)
 
@@ -900,7 +901,7 @@ def _resolve_scope_overloads(spec, overloads, error_log, final_checks,
         # one.  If there is %MethodCode then assume that it will handle any
         # potential conflicts.
         if overload.method_code is None and spec.is_strict:
-            for previous_overload in overloads:
+            for previous_overload in container.overloads:
                 if previous_overload is overload:
                     break
 
@@ -929,6 +930,9 @@ def _resolve_scope_overloads(spec, overloads, error_log, final_checks,
 
             if overload.is_abstract:
                 scope.is_abstract = True
+
+    bindings.call_build_system_extensions('function_group_complete_definition',
+            container.overloads, container)
 
 
 def _resolve_variables(spec, mod, error_log):

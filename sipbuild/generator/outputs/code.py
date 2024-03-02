@@ -1185,9 +1185,9 @@ sip_qt_metacast_func sip_{module_name}_qt_metacast;
     if extension_data:
         sf.write('    /* Set the extension data from the build system extensions. */\n')
 
-        for wrapped_object, extension_name, data_name in extension_data:
+        for wrapped_object, extension_name, structure_name in extension_data:
             gto_name = _gto_name(wrapped_object)
-            sf.write(f'    sipTypeSetExtensionData({gto_name}, "{extension_name}", &{data_name});\n')
+            sf.write(f'    sipTypeSetExtensionData({gto_name}, "{extension_name}", &{structure_name});\n')
 
         sf.write('\n')
 
@@ -2303,10 +2303,10 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
     # Generate any build system extension data for the mapped type and add to
     # the list of all extension data.
     for extension in bindings.build_system_extensions:
-        mapped_type_extension_name = f'extension_data_{extension.name}_{mapped_type_name}'
-        if extension.write_mapped_type_extension_code(sf, mapped_type, mapped_type_extension_name):
+        structure_name = f'extension_data_{extension.name}_{mapped_type_name}'
+        if extension.mapped_type_write_extension_structure(mapped_type, sf, structure_name):
             extension_data.append(
-                    (mapped_type, extension.name, mapped_type_extension_name))
+                    (mapped_type, extension.name, structure_name))
 
     td_plugin_data = 'SIP_NULLPTR'
 
@@ -5692,10 +5692,9 @@ static sipPySlotDef slots_{klass_name}[] = {{
 
     # Generate any build system extension data structures.
     for extension in bindings.build_system_extensions:
-        klass_extension_name = f'extension_data_{extension.name}_{klass_name}'
-        if extension.write_class_extension_code(sf, klass, klass_extension_name):
-            extension_data.append(
-                    (klass, extension.name, klass_extension_name))
+        structure_name = f'extension_data_{extension.name}_{klass_name}'
+        if extension.class_write_extension_structure(klass, sf, structure_name):
+            extension_data.append((klass, extension.name, structure_name))
 
     plugin_ref = 'SIP_NULLPTR'
 
@@ -5900,7 +5899,6 @@ def _can_set_variable(variable):
     return True
 
 
-# XXX - need to be able to write this code in the extension
 def _pyqt_emitters(sf, spec, klass):
     """ Generate the PyQt emitters for a class. """
 
@@ -6431,7 +6429,6 @@ def _skip_overload(overload, member, klass, scope, want_local=True):
         return True
 
     # Skip if it's a signal.
-    # XXX - need a filtering mechanism (what is the context?)
     if overload.pyqt_is_signal:
         return True
 
@@ -8864,7 +8861,6 @@ def _callable_overloads(member, overloads):
     """ An iterator over the non-private and non-signal overloads. """
 
     for overload in overloads:
-        # XXX - need a filtering mechanism, context?
         if overload.common is member and overload.access_specifier is not AccessSpecifier.PRIVATE and not overload.pyqt_is_signal:
             yield overload
 

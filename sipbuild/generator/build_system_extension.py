@@ -7,11 +7,16 @@ from .outputs.formatters import (fmt_argument_as_cpp_type, fmt_docstring,
         fmt_docstring_of_overload)
 from .parser import (InvalidAnnotation, validate_boolean, validate_integer,
         validate_string_list, validate_string)
-from .specification import DocstringSignature
+from .specification import GILAction, MappedType, Module, WrappedClass
 
 
 class BuildSystemExtension:
-    """ The base class for a build system extension. """
+    """ The base class for a build system extension.  An extension uses opaque
+    representations of a scope (either a module, class or mapped type), an
+    exception, a function, a function group (a sequence of overloaded
+    functions), a ctor, a dtor, a union, a namespace, a typedef, an argument, a
+    variable, an enum and an enum member.
+    """
 
     def __init__(self, name, bindings, spec):
         """ Initialise the extension. """
@@ -20,6 +25,18 @@ class BuildSystemExtension:
         self.bindings = bindings
 
         self._spec = spec
+
+    def get_argument_cpp_decl(self, argument, scope, strip=0):
+        """ Returns the C++ declaration of an argument within a specific scope.
+        If the name of the argument type contains scopes then 'strip' specifies
+        the number of leading scopes to be removed.  If it is -1 then only the
+        leading global scope is removed.
+        """
+
+        iface_file = None if isinstance(scope, Module) else scope.iface_file
+
+        return fmt_argument_as_cpp_type(self._spec, argument, scope=iface_file,
+                strip=strip)
 
     def get_extension_data(self, extendable, factory=None):
         """ Return the build system extension-specific extension data for an
@@ -44,6 +61,26 @@ class BuildSystemExtension:
         extendable.extension_data[self.name] = extension_data
 
         return extension_data
+
+    @staticmethod
+    def get_class_cpp_name(klass):
+        """ Return the fully qualified C++ name of a class. """
+
+        # XXX - have a fq option? similar for all get of names?
+        return klass.iface_file.fq_cpp_name.as_cpp
+
+    @staticmethod
+    def get_function_cpp_arguments(function):
+        """ Return a sequence of the C++ arguments of a function. """
+
+        return function.cpp_signature.args
+
+    @staticmethod
+    def get_function_cpp_name(function):
+        """ Return the C++ name of a function. """
+
+        # XXX - have a fq option? similar for all get of names?
+        return function.cpp_name
 
     @staticmethod
     def parse_boolean_annotation(name, raw_value, location):
@@ -110,80 +147,11 @@ class BuildSystemExtension:
 
         pm.parser_error(p, symbol, error_message)
 
-    def query_argument_cpp_decl(self, argument, scope, strip=0):
-        """ Returns the C++ declaration of an argument within a specific scope.
-        If the name of the argument type contains scopes then 'strip' specifies
-        the number of leading scopes to be removed.  If it is -1 then only the
-        leading global scope is removed.
-        """
-
-        return fmt_argument_as_cpp_type(self._spec, argument,
-                scope=scope.iface_file, strip=strip)
-
     @staticmethod
     def query_argument_is_optional(argument):
         """ Returns True if the argument is optional. """
 
         return argument.default_value is not None
-
-    def query_function_default_docstring(self, function):
-        """ Return the function's default (ie. automatically generated)
-        docstring.
-        """
-
-        return fmt_docstring_of_overload(self._spec, function)
-
-    @staticmethod
-    def query_function_default_docstring_is_appended(self):
-        """ Returns True the function's default (ie. automatically generated)
-        docstring should be appended.
-        """
-
-        return function.docstring.signature is DocstringSignature.APPENDED
-
-    @staticmethod
-    def query_function_default_docstring_is_prepended():
-        """ Returns True the function's default (ie. automatically generated)
-        docstring should be prepended.
-        """
-
-        return function.docstring.signature is DocstringSignature.PREPENDED
-
-    @staticmethod
-    def query_function_docstring(function):
-        """ Return the function's docstring or None if it doesn't have one. """
-
-        return None if function.docstring is None else fmt_docstring(function.docstring)
-
-    @staticmethod
-    def query_class_cpp_name(klass):
-        """ Return the fully qualified C++ name of a class. """
-
-        return klass.iface_file.fq_cpp_name.as_cpp
-
-    @staticmethod
-    def query_class_function_group_pymethoddef_reference(klass, group_nr):
-        """ Return a reference to a PyMethod structure that handles a group of
-        overloaded class functions.
-        """
-
-        return f'&methods_{klass.iface_file.fq_cpp_name.as_word}[{group_nr}]'
-
-    @staticmethod
-    def query_class_function_groups(klass):
-        """ Return a sequence of the class's function groups.  A function group
-        is a sequence of overloaded functions with the same C++ name.
-        """
-
-        groups = {}
-
-        for overload in klass.overloads:
-            overload_list = groups.setdefault(overload.common.py_name.name, [])
-            overload_list.append(overload)
-
-        # The order is important as the index can be used to reference a
-        # particular group.
-        return [groups[m.py_name.name] for m in klass.members]
 
     @staticmethod
     def query_class_is_subclass(klass, module_name, class_name):
@@ -198,49 +166,73 @@ class BuildSystemExtension:
         return False
 
     @staticmethod
-    def query_function_cpp_arguments(function):
-        """ Return a sequence of the C++ arguments of a function. """
+    def query_scope_is_class(scope):
+        """ Return True if a scope is a class. """
 
-        return function.cpp_signature.args
+        return isinstance(scope, WrappedClass)
 
     @staticmethod
-    def query_function_cpp_name(function):
-        """ Return the C++ name of a function. """
+    def query_scope_is_mapped_type(scope):
+        """ Return True if a scope is a mapped type. """
 
-        return function.cpp_name
+        return isinstance(scope, MappedType)
+
+    @staticmethod
+    def query_scope_is_module(scope):
+        """ Return True if a scope is a module. """
+
+        return isinstance(scope, Module)
+
+    @staticmethod
+    def set_function_release_gil(function):
+        """ Apply the /ReleaseGIL/ annotation to a function. """
+
+        function.gil_action = GILAction.RELEASE
+
+    def write_function_group_bindings(self, function_group, scope, output,
+            prefix=''):
+        """ Write the C/C++ function of type PyCFunction that implements the
+        bindings of a function group.  The name of the generated function
+        (preceeded with an optional prefix) is returned.
+        """
+
+        # XXX
+        return ''
+
+    def write_function_group_docstring(self, function_group, scope,
+            output, prefix=''):
+        """ Write the PyDoc_STRVAR() call that implements the docstring of a
+        function group.  The name of the generated C object (preceeded with an
+        optional prefix) is returned.
+        """
+
+        # XXX
+        return ''
 
     # The rest of the class are the stubs to be re-implemented by sub-classes.
+    # There is a naming convention that splits the name into three broad
+    # sections.  The first is the type of object that is the subject of the
+    # call, the second is the generic action and the third describes the
+    # detail.
 
-    def complete_class_definition(self, klass):
+    def argument_parse_annotation(self, argument, name, raw_value, location):
+        """ Parse an argument annotation.  Return True if it was parsed. """
+
+        return False
+
+    def class_complete_definition(self, klass):
         """ Complete the definition of a class. """
 
         pass
 
-    def complete_function_parse(self, function, scope):
-        """ Complete the parsing of a (possibly scoped) function. """
-
-        pass
-
-    def get_class_access_specifier_keywords(self):
+    def class_get_access_specifier_keywords(self):
         """ Return a sequence of class action specifier keywords to be
         recognised by the parser.
         """
 
         return ()
 
-    def get_function_keywords(self):
-        """ Return a sequence of function keywords to be recognised by the
-        parser.
-        """
-
-        return ()
-
-    def parse_argument_annotation(self, argument, name, raw_value, location):
-        """ Parse an argument annotation.  Return True if it was parsed. """
-
-        return False
-
-    def parse_class_access_specifier(self, klass, primary, secondary):
+    def class_parse_access_specifier(self, klass, primary, secondary):
         """ Parse a primary and optional secondary class access specifier.  If
         it was parsed return the C++ standard access specifier (ie. 'public',
         'protected' or 'private') to use, otherwise return None.
@@ -248,80 +240,97 @@ class BuildSystemExtension:
 
         return None
 
-    def parse_class_annotation(self, klass, name, raw_value, location):
+    def class_parse_annotation(self, klass, name, raw_value, location):
         """ Parse a class annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_ctor_annotation(self, ctor, name, raw_value, location):
+    def class_write_extension_structure(self, klass, output, structure_name):
+        """ Write the code that implements a class extension data structure.
+        Return True if something was written.
+        """
+
+        return False
+
+    def ctor_parse_annotation(self, ctor, name, raw_value, location):
         """ Parse a ctor annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_dtor_annotation(self, dtor, name, raw_value, location):
+    def dtor_parse_annotation(self, dtor, name, raw_value, location):
         """ Parse a dtor annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_enum_annotation(self, enum, name, raw_value, location):
+    def enum_parse_annotation(self, enum, name, raw_value, location):
         """ Parse an enum annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_enum_member_annotation(self, enum_member, name, raw_value,
+    def enum_member_parse_annotation(self, enum_member, name, raw_value,
             location):
         """ Parse an enum member annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_function_annotation(self, function, name, raw_value, location):
+    def function_complete_parse(self, function, scope):
+        """ Complete the parsing of a function. """
+
+        pass
+
+    def function_get_keywords(self):
+        """ Return a sequence of function keywords to be recognised by the
+        parser.
+        """
+
+        return ()
+
+    def function_parse_annotation(self, function, name, raw_value, location):
         """ Parse a function annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_function_keyword(self, function, keyword):
+    def function_parse_keyword(self, function, keyword):
         """ Parse a function keyword.  Return True if it was parsed. """
 
         return False
 
-    def parse_mapped_type_annotation(self, mapped_type, name, raw_value,
+    def function_group_complete_definition(self, function_group, scope):
+        """ Update a function group after it has been defined. """
+
+        pass
+
+    def mapped_type_parse_annotation(self, mapped_type, name, raw_value,
             location):
         """ Parse a mapped type annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_namespace_annotation(self, namespace, name, raw_value,
-            location):
+    def mapped_type_write_extension_structure(self, mapped_type, output,
+            structure_name):
+        """ Write the code that implements a mapped type extension data
+        structure.  Return True if something was written.
+        """
+
+        return False
+
+    def namespace_parse_annotation(self, namespace, name, raw_value, location):
         """ Parse a namespace annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_typedef_annotation(self, typedef, name, raw_value, location):
+    def typedef_parse_annotation(self, typedef, name, raw_value, location):
         """ Parse a typedef annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_union_annotation(self, union, name, raw_value, location):
+    def union_parse_annotation(self, union, name, raw_value, location):
         """ Parse a union annotation.  Return True if it was parsed. """
 
         return False
 
-    def parse_variable_annotation(self, variable, name, raw_value, location):
+    def variable_parse_annotation(self, variable, name, raw_value, location):
         """ Parse a variable annotation.  Return True if it was parsed. """
-
-        return False
-
-    def write_class_extension_code(self, output, klass, name):
-        """ Write code that implements a class extension data structure.
-        Return True if something was written.
-        """
-
-        return False
-
-    def write_mapped_type_extension_code(self, output, mapped_type, name):
-        """ Write code that implements a mapped type extension data structure.
-        Return True if something was written.
-        """
 
         return False
 

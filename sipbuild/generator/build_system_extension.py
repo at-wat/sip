@@ -167,6 +167,12 @@ class BuildSystemExtension:
         return False
 
     @staticmethod
+    def query_function_has_method_code(function):
+        """ Return True if a function has %MethodCode. """
+
+        return function.method_code is not None
+
+    @staticmethod
     def query_scope_is_class(scope):
         """ Return True if a scope is a class. """
 

@@ -4,7 +4,8 @@
 
 
 from .scoped_name import ScopedName
-from .specification import ArgumentType, CachedName, IfaceFile, IfaceFileType
+from .specification import (ArgumentType, CachedName, IfaceFile, IfaceFileType,
+        WrappedClass)
 
 
 def append_iface_file(iface_file_list, iface_file):
@@ -223,6 +224,20 @@ def find_method(klass, name):
             return member
 
     return None
+
+
+def get_py_scope(scope):
+    """ Return the Python scope by accounting for hidden C++ namespaces. """
+
+    return None if isinstance(scope, WrappedClass) and scope.is_hidden_namespace else scope
+
+
+def get_py_scope_prefix(py_scope):
+    """ Return the prefix to be used for a Python scope in the generated name
+    of a C/C++ function or data structure.
+    """
+
+    return '' if py_scope is None else py_scope.iface_file.fq_cpp_name.as_word + '_'
 
 
 def normalised_scoped_name(scoped_name, scope):

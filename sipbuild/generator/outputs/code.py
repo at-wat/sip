@@ -17,7 +17,8 @@ from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, CodeBlock, DocstringSignature, GILAction, IfaceFileType,
         KwArgs, MappedType, PySlot, QualifierType, Transfer, ValueType,
         WrappedClass, WrappedEnum)
-from ..utils import py_as_int, same_signature
+from ..utils import (get_py_scope, get_py_scope_prefix, py_as_int,
+        same_signature)
 
 from .formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
         fmt_class_as_scoped_name, fmt_copying, fmt_docstring,
@@ -1572,12 +1573,8 @@ def _ordinary_function(sf, spec, bindings, member, scope=None):
 
     member_name = member.py_name.name
 
-    if scope is None:
-        py_scope = None
-        py_scope_prefix = ''
-    else:
-        py_scope = _py_scope(scope)
-        py_scope_prefix = '' if py_scope is None else py_scope.iface_file.fq_cpp_name.as_word + '_'
+    py_scope = get_py_scope(scope)
+    py_scope_prefix = get_py_scope_prefix(py_scope)
 
     sf.write('\n\n')
 
@@ -1664,7 +1661,7 @@ def _enum_member_table(sf, spec, scope=None):
         if enum.module is not spec.module:
             continue
 
-        enum_py_scope = _py_scope(enum.scope)
+        enum_py_scope = get_py_scope(enum.scope)
 
         if isinstance(scope, WrappedClass):
             # The scope is a class.
@@ -1688,7 +1685,7 @@ def _enum_member_table(sf, spec, scope=None):
     enum_members.sort(key=lambda v: v.scope.type_nr)
     enum_members.sort(key=lambda v: v.py_name.name)
 
-    if _py_scope(scope) is None:
+    if get_py_scope(scope) is None:
         sf.write(
 '''
 /* These are the enum members of all global enums. */
@@ -1797,7 +1794,7 @@ def _types_inline(sf, spec):
 
             no_intro = False
 
-        if _py_scope(variable.scope) is None:
+        if get_py_scope(variable.scope) is None:
             dict_name = 'sipModuleDict'
         else:
             dict_name = f'(PyObject *)sipTypeAsPyTypeObject({_gto_name(variable.scope)})'
@@ -1948,7 +1945,7 @@ def _int_instances(sf, spec, scope=None):
 
             enum = type.definition
 
-            if _py_scope(enum.scope) is not scope or enum.module is not spec.module:
+            if get_py_scope(enum.scope) is not scope or enum.module is not spec.module:
                 continue
 
             for enum_member in enum.members:
@@ -1972,7 +1969,7 @@ def _int_instances(sf, spec, scope=None):
     # Anonymous enum members are handled as int variables.
     if spec.abi_version >= (13, 0) or scope is None:
         for enum in spec.enums:
-            if _py_scope(enum.scope) is not scope or enum.module is not spec.module:
+            if get_py_scope(enum.scope) is not scope or enum.module is not spec.module:
                 continue
 
             if enum.fq_cpp_name is not None:
@@ -5733,7 +5730,7 @@ static sipPySlotDef slots_{klass_name}[] = {{
 
     if klass.real_class is not None:
         encoded_type = _encoded_type(module, klass.real_class)
-    elif _py_scope(klass.scope) is not None:
+    elif get_py_scope(klass.scope) is not None:
         encoded_type = _encoded_type(module, klass.scope)
     else:
         encoded_type = '{0, 0, 1}'
@@ -8959,12 +8956,6 @@ def _overload_cpp_name(overload):
     return overload.cpp_name if py_slot is None else _SLOT_NAME_MAP[py_slot]
 
 
-def _py_scope(scope):
-    """ Return the Python scope by accounting for hidden C++ namespaces. """
-
-    return None if isinstance(scope, WrappedClass) and scope.is_hidden_namespace else scope
-
-
 def _release_gil(gil_action, bindings):
     """ Return True if the GIL is to be released. """
 
@@ -8975,7 +8966,7 @@ def _variables_in_scope(spec, scope, check_handler=True):
     """ An iterator over the variables in a scope. """
 
     for variable in spec.variables:
-        if _py_scope(variable.scope) is scope and variable.module is spec.module:
+        if get_py_scope(variable.scope) is scope and variable.module is spec.module:
             if check_handler and variable.needs_handler:
                 continue
 

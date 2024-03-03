@@ -8,6 +8,7 @@ from .outputs.formatters import (fmt_argument_as_cpp_type, fmt_docstring,
 from .parser import (InvalidAnnotation, validate_boolean, validate_integer,
         validate_string_list, validate_string)
 from .specification import GILAction, MappedType, Module, WrappedClass
+from .utils import get_py_scope, get_py_scope_prefix
 
 
 class BuildSystemExtension:
@@ -63,11 +64,9 @@ class BuildSystemExtension:
         return extension_data
 
     @staticmethod
-    def get_class_cpp_name(klass):
+    def get_class_fq_cpp_name(klass):
         """ Return the fully qualified C++ name of a class. """
 
-        # XXX - have a fq option? similar for all get of names?
-        # XXX - still needed?
         return klass.iface_file.fq_cpp_name.as_cpp
 
     @staticmethod
@@ -80,8 +79,15 @@ class BuildSystemExtension:
     def get_function_cpp_name(function):
         """ Return the C++ name of a function. """
 
-        # XXX - have a fq option? similar for all get of names?
         return function.cpp_name
+
+    @staticmethod
+    def get_function_group_bindings(function_group_name, scope):
+        """ Return the name of the generated function that implement the
+        bindings of a function group.
+        """
+
+        return 'meth_' + get_py_scope_prefix(get_py_scope(scope)) + function_group_name
 
     @staticmethod
     def parse_boolean_annotation(name, raw_value, location):

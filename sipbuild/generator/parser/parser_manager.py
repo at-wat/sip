@@ -665,22 +665,13 @@ class ParserManager:
         # name.
         member = self._find_member(p, symbol, py_name, arg_list, annotations,
                 overload.method_code)
+        member.overloads.append(overload)
 
         # Configure the overload.
         overload.access_specifier = self.scope_access_specifier
         overload.common = member
         overload.cpp_name = cpp_name
         overload.py_signature = py_signature
-
-        for m in self.module_state.module.global_functions:
-            if m is member:
-                container = self.module_state.module
-                break
-        else:
-            container = self.scope
-
-        container.overloads.append(overload)
-
         overload.pyqt_is_signal = self.scope_pyqt_are_signals
 
         if overload.access_specifier is AccessSpecifier.PROTECTED and self.bindings.protected_is_public:
@@ -743,10 +734,7 @@ class ParserManager:
                 # keyword argument names are marked as used.
                 # XXX - need a way to filter functions
                 if not overload.pyqt_is_signal and overload.access_specifier is AccessSpecifier.PROTECTED and not self.in_main_module:
-                    for kwod in self.scope.overloads:
-                        if kwod.common is not member:
-                            continue
-
+                    for kwod in member.overloads:
                         if kwod.kw_args is KwArgs.NONE:
                             continue
 
@@ -812,7 +800,8 @@ class ParserManager:
                     py_signature, overload.cpp_signature, overload.method_code)
 
         self.bindings.call_build_system_extensions('function_complete_parse',
-                overload, container)
+                overload,
+                self.module_state.module if self.scope is None else self.scope)
 
     def add_mapped_type(self, p, symbol, mapped_type, cpp_type, annotations):
         """ Complete the implementation of a mapped type and add it to the
@@ -1841,10 +1830,7 @@ class ParserManager:
                 common=member, cpp_name=py_name, cpp_signature=cpp_signature,
                 py_signature=py_signature, method_code=method_code)
 
-        if self.scope is None:
-            self.module_state.module.overloads.append(overload)
-        else:
-            self.scope.overloads.append(overload)
+        member.overloads.append(overload)
 
     def _check_ellipsis(self, p, symbol, signature):
         """ Check any ellipsis in a signature. """

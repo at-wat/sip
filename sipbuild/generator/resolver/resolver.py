@@ -92,9 +92,10 @@ def resolve(spec, modules, bindings):
 
     # Add any automatically generated methods.
     for klass in spec.classes:
-        for overload in klass.overloads:
-            if overload.is_auto_generated:
-                _add_auto_overload(spec, klass, overload)
+        for member in klass.members:
+            for overload in member.overloads:
+                if overload.is_auto_generated:
+                    _add_auto_overload(spec, klass, overload)
 
     # Move casts and slots around to their correct classes (if in the same
     # module) or create proxies for them (if cross-module).
@@ -121,16 +122,18 @@ def resolve(spec, modules, bindings):
                 _get_virtuals(spec, klass, error_log)
 
         elif klass.iface_file.type is IfaceFileType.NAMESPACE:
-            for overload in klass.overloads:
-                _iface_files_are_used_by_overload(spec, klass.iface_file.used,
-                        overload)
+            for member in klass.members:
+                for overload in member.overloads:
+                    _iface_files_are_used_by_overload(
+                            spec, klass.iface_file.used, overload)
 
     for mod in modules:
         # Create the list of numbered types sorted by type name.
         _create_sorted_numbered_types(spec, mod, error_log)
 
-        for overload in mod.overloads:
-            _iface_files_are_used_by_overload(spec, mod.used, overload)
+        for member in mod.global_functions:
+            for overload in member.overloads:
+                _iface_files_are_used_by_overload(spec, mod.used, overload)
 
         # Update proxies with some information from the real classes.
         for klass in mod.proxies:
@@ -204,7 +207,8 @@ def _resolve_module(spec, bindings, mod, error_log, final_checks, seen=None):
     # Resolve typedefs, variables and global functions.
     _resolve_typedefs(spec, mod, error_log)
     _resolve_variables(spec, mod, error_log)
-    _resolve_scope_overloads(spec, bindings, mod, error_log, final_checks)
+    _resolve_scope_overloads(spec, bindings, mod.global_functions, mod,
+            error_log, final_checks)
 
     # Resolve class ctors, functions and casts.
     for klass in spec.classes:
@@ -214,8 +218,8 @@ def _resolve_module(spec, bindings, mod, error_log, final_checks, seen=None):
             # Handle any dtor exceptions.
             _set_needed_exceptions(spec, mod, klass.dtor_throw_args)
 
-            _resolve_scope_overloads(spec, bindings, klass, error_log,
-                    final_checks, scope=klass)
+            _resolve_scope_overloads(spec, bindings, klass.members, klass,
+                    error_log, final_checks, scope=klass)
             _transform_casts(spec, klass, error_log)
 
     # Resolve mapped types based on templates.
@@ -239,47 +243,47 @@ def _add_complementary_slots(spec, klass):
     behaviour of automatically interpreting (for example) >= as !<.
     """
 
+    # Go through a copy of the list because it will probably be updated.
     for member in list(klass.members):
         try:
             compl, compl_name = _SLOT_MAP[member.py_slot]
         except KeyError:
             continue
 
-        _add_complementary_slot(spec, klass, member, compl, compl_name)
+        _add_complementary_overloads(spec, klass, member, compl, compl_name)
 
 
-def _add_complementary_slot(spec, klass, member, compl, compl_name):
-    """ Add a complementary slot if it is missing. """
+def _add_complementary_overloads(spec, klass, member, compl, compl_name):
+    """ Add complementary overloads for any that are missing. """
 
     member2 = None
 
-    for overload in klass.overloads:
-        if overload.common is not member or overload.is_complementary or overload.method_code is not None:
+    # Create a new complement for each overload that isn't a complement itself
+    for overload in member.overloads:
+        if overload.is_complementary or overload.method_code is not None:
             continue
 
-        # Try and find an existing complementary slot.
-        for overload2 in klass.overloads:
-            if overload2.common.py_slot is compl and same_signature(spec, overload.py_signature, overload2.py_signature):
+        if member2 is None:
+            # See if any complementary overloads already exist.
+            for member2 in klass.members:
+                if member2.py_slot is compl:
+                    break
+            else:
+                member2 = Member(member.module, cached_name(spec, compl_name),
+                        py_slot=compl)
+
+                if member.py_name.used:
+                    member2.py_name.used = True
+
+                klass.members.insert(0, member2)
+
+        # See if there is already a complementary overload with the same
+        # signature already exists.
+        for overload2 in member2.overloads:
+            if same_signature(spec, overload.py_signature, overload2.py_signature):
                 break
         else:
-            # There is no explicit complementary slot so create a new member if
-            # needed.
-            if member2 is None:
-                for member2 in klass.members:
-                    if member2.py_slot is compl:
-                        break
-                else:
-                    member2 = copy(member)
-
-                    member2.py_name = cached_name(spec, compl_name)
-                    member2.py_slot = compl
-
-                    if member.py_name.used:
-                        member2.py_name.used = True
-
-                    klass.members.insert(0, member2)
-
-            # Create the complementary slot.
+            # Create the complementary overload.
             overload2 = copy(overload)
 
             overload2.is_virtual = False
@@ -287,8 +291,7 @@ def _add_complementary_slot(spec, klass, member, compl, compl_name):
             overload2.common = member2
             overload2.cpp_name = compl_name
 
-            klass.overloads.insert(0, overload2)
-            break
+            member2.overloads.insert(0, overload2)
 
 
 def _check_helpers(spec, klass):
@@ -419,10 +422,7 @@ def _move_class_casts(spec, klass, error_log):
 def _move_global_slot(spec, global_slot, error_log):
     """ If possible, move a global slot to its correct class. """
 
-    for overload in list(spec.module.overloads):
-        if overload.common is not global_slot:
-            continue
-
+    for overload in list(global_slot.overloads):
         # We know that the slot has the right number of arguments, but the
         # first or second one needs to be a class or enum defined in the same
         # module.  Otherwise we leave it as it is and publish it as a slot
@@ -435,19 +435,16 @@ def _move_global_slot(spec, global_slot, error_log):
             arg1 = None
 
         arg_members = None
-        arg_overloads = None
         arg_module = None
         arg_enum = None
         is_second = False
 
         if arg0.type is ArgumentType.CLASS:
             arg_members = arg0.definition.members
-            arg_overloads = arg0.definition.overloads
             arg_module = arg0.definition.iface_file.module
 
         elif arg0.type is ArgumentType.ENUM:
             arg_members = arg0.definition.slots
-            arg_overloads = arg0.definition.overloads;
             arg_module = arg0.definition.module
             arg_enum = arg0.definition
 
@@ -462,13 +459,11 @@ def _move_global_slot(spec, global_slot, error_log):
 
         elif arg1.type is ArgumentType.CLASS:
             arg_members = arg1.definition.members
-            arg_overloads = arg1.definition.overloads
             arg_module = arg1.definition.iface_file.module
             is_second = True
 
         elif arg1.type is ArgumentType.ENUM:
             arg_members = arg1.definition.slots
-            arg_overloads = arg1.definition.overloads
             arg_module = arg1.definition.module
             arg_enum = arg1.definition
             is_second = True
@@ -514,13 +509,13 @@ def _move_global_slot(spec, global_slot, error_log):
                     proxy.members.insert(0, proxy_member)
 
                 # Remove the overload from the list.
-                spec.module.overloads.remove(overload)
+                global_slot.overloads.remove(overload)
 
                 # Add the overload to the proxy.
                 overload.common = proxy_member
                 overload.no_typehint = True
 
-                proxy.overloads.insert(0, overload)
+                proxy_member.overloads.insert(0, overload)
 
                 # Remove the overload's first argument.
                 del overload.py_signature.args[0]
@@ -528,7 +523,7 @@ def _move_global_slot(spec, global_slot, error_log):
             continue
 
         # Remove from the list.
-        spec.module.overloads.remove(overload)
+        global_slot.overloads.remove(overload)
 
         if arg_enum is not None:
             _enum_iface_file_is_used(arg_enum, arg_module)
@@ -541,9 +536,9 @@ def _move_global_slot(spec, global_slot, error_log):
             if arg_member.py_slot is global_slot.py_slot:
                 break
         else:
-            arg_member = copy(global_slot)
+            arg_member = Member(arg_module, global_slot.py_name,
+                    py_slot=global_slot.py_slot)
 
-            arg_member.module = arg_module
             arg_members.insert(0, arg_member)
 
             # Legacy enum members, when accessed as scoped values, are created
@@ -562,7 +557,7 @@ def _move_global_slot(spec, global_slot, error_log):
         overload.common = arg_member
         overload.is_global = True
 
-        arg_overloads.append(overload)
+        arg_member.overloads.append(overload)
 
         # Inject an additional equality slot if necessary.
         if inject_equality_slot:
@@ -574,7 +569,7 @@ def _move_global_slot(spec, global_slot, error_log):
             eq_overload.py_signature.args[0].derefs = [False]
             del eq_overload.py_signature.args[1]
 
-            arg_overloads.append(eq_overload)
+            arg_member.overloads.append(eq_overload)
 
         # Remove the first argument of inplace numeric operators and comparison
         # operators.
@@ -630,7 +625,8 @@ def _add_auto_overload(spec, auto_klass, auto_overload):
                 overload = copy(auto_overload)
                 overload.common = member
                 overload.is_autogenerated = False
-                klass.overloads.insert(0, overload)
+
+                member.overloads.insert(0, overload)
 
                 if klass.iface_file.module is spec.module:
                     member.py_name.used = True
@@ -758,14 +754,15 @@ def _set_mro(spec, klass, error_log, seen=None):
     else:
         # Note that we should be able to provide better support for abstract
         # private methods than we do at the moment.
-        for overload in klass.overloads:
-            if overload.is_abstract and overload.access_specifier is AccessSpecifier.PRIVATE:
-                klass.has_shadow = False
+        for member in klass.members:
+            for overload in member.overloads:
+                if overload.is_abstract and overload.access_specifier is AccessSpecifier.PRIVATE:
+                    klass.has_shadow = False
 
-                # It also means we cannot create an instance from Python.
-                klass.can_create = False
+                    # It also means we cannot create an instance from Python.
+                    klass.can_create = False
 
-                break
+                    break
 
     # Add it to the new list of classes.
     spec.classes.append(klass)
@@ -788,8 +785,9 @@ def _resolve_mapped_types(spec, bindings, mod, error_log, final_checks):
             if mapped_type.type.type is ArgumentType.TEMPLATE:
                 _resolve_mapped_type_types(spec, mapped_type, error_log)
             else:
-                _resolve_scope_overloads(spec, bindings, mapped_type,
-                        error_log, final_checks, scope=mapped_type)
+                _resolve_scope_overloads(spec, bindings, mapped_type.members,
+                        mapped_type, error_log, final_checks,
+                        scope=mapped_type)
 
 
 def _resolve_ctors(spec, klass, error_log):
@@ -889,50 +887,53 @@ def _add_default_copy_ctor(klass):
     klass.ctors.append(ctor)
 
 
-def _resolve_scope_overloads(spec, bindings, container, error_log,
+def _resolve_scope_overloads(spec, bindings, members, container, error_log,
         final_checks, scope=None):
     """ Resolve the data types for a scope's overloads. """
 
-    for overload in container.overloads:
-        _resolve_func_types(spec, overload.common.module, scope, overload,
-                error_log, final_checks)
+    for member in members:
+        for overload in member.overloads:
+            _resolve_func_types(spec, overload.common.module, scope, overload,
+                    error_log, final_checks)
 
-        # Now check that the Python signature doesn't conflict with an earlier
-        # one.  If there is %MethodCode then assume that it will handle any
-        # potential conflicts.
-        if overload.method_code is None and spec.is_strict:
-            for previous_overload in container.overloads:
-                if previous_overload is overload:
-                    break
+            # Now check that the Python signature doesn't conflict with an
+            # earlier one.  If there is %MethodCode then assume that it will
+            # handle any potential conflicts.
+            if overload.method_code is None and spec.is_strict:
+                for previous_overload in member.overloads:
+                    if previous_overload is overload:
+                        break
 
-                if previous_overload.common is not overload.common:
-                    continue
+                    if previous_overload.common is not overload.common:
+                        continue
 
-                if previous_overload.method_code is not None:
-                    continue
+                    if previous_overload.method_code is not None:
+                        continue
 
-                sig_state = _same_python_signature(spec,
-                        previous_overload.py_signature, overload.py_signature)
+                    sig_state = _same_python_signature(spec,
+                            previous_overload.py_signature,
+                            overload.py_signature)
 
-                if sig_state is None:
-                    # The error has already been logged.
-                    break
+                    if sig_state is None:
+                        # The error has already been logged.
+                        break
 
-                if sig_state:
-                    _log_overload_error(error_log,
-                            "has overloaded functions with the same Python signature",
-                            overload, scope=scope)
-                    break
+                    if sig_state:
+                        _log_overload_error(error_log,
+                                "has overloaded functions with the same Python signature",
+                                overload, scope=scope)
+                        break
 
-        if isinstance(scope, WrappedClass):
-            if scope.deprecated:
-                overload.deprecated = True
+            if isinstance(scope, WrappedClass):
+                if scope.deprecated:
+                    overload.deprecated = True
 
-            if overload.is_abstract:
-                scope.is_abstract = True
+                if overload.is_abstract:
+                    scope.is_abstract = True
 
-    bindings.call_build_system_extensions('function_group_complete_definition',
-            container.overloads, container)
+        bindings.call_build_system_extensions(
+                'function_group_complete_definition', member.overloads,
+                container, member.py_name.name)
 
 
 def _resolve_variables(spec, mod, error_log):
@@ -959,23 +960,22 @@ def _get_visible_py_members(spec, klass):
                 visible_member = VisibleMember(member, mro_klass)
                 klass.visible_members.insert(0, visible_member)
 
-                for overload in mro_klass.overloads:
-                    if overload.common is member:
-                        need_types = False
+                for overload in member.overloads:
+                    need_types = False
 
-                        # If the visible overload is abstract then it hasn't
-                        # had a concrete implementation so this class must also
-                        # be abstract.
-                        if overload.is_abstract:
-                            klass.is_abstract = True
+                    # If the visible overload is abstract then it hasn't had a
+                    # concrete implementation so this class must also be
+                    # abstract.
+                    if overload.is_abstract:
+                        klass.is_abstract = True
 
-                        if klass.iface_file.module is spec.module and (klass is mro_klass or (overload.access_specifier is AccessSpecifier.PROTECTED and klass.has_shadow)):
-                            need_types = True
-                            member.py_name.used = True
+                    if klass.iface_file.module is spec.module and (klass is mro_klass or (overload.access_specifier is AccessSpecifier.PROTECTED and klass.has_shadow)):
+                        need_types = True
+                        member.py_name.used = True
 
-                        _iface_files_are_used_by_overload(spec,
-                                klass.iface_file.used, overload,
-                                need_types=need_types);
+                    _iface_files_are_used_by_overload(spec,
+                            klass.iface_file.used, overload,
+                            need_types=need_types);
 
 
 def _get_virtuals(spec, klass, error_log):
@@ -987,38 +987,20 @@ def _get_virtuals(spec, klass, error_log):
         for virtual_overload in superklass.virtual_overloads:
             implicit = True
 
-            for overload in klass.overloads:
-                if virtual_overload.overload.cpp_name != overload.cpp_name:
-                    continue
+            for member in klass.members:
+                for overload in member.overloads:
+                    if virtual_overload.overload.cpp_name != overload.cpp_name:
+                        continue
 
-                implicit = False
+                    implicit = False
 
-                if overload.is_final:
-                    break
+                    if overload.is_final:
+                        break
 
-                # See if it re-implements rather than hides.
-                if _same_cpp_overload(spec, virtual_overload.overload, overload):
-                    # What if is is private?
-                    overload.is_virtual = True
-                    overload.is_virtual_reimplementation = True
-
-                    # Use the base implementation's virtual handler code if
-                    # there is any.  We cannot just use its virtual handler
-                    # because this re-implementation may have different
-                    # annotations which means the complete handler would be
-                    # different.  In practice there is no reason why it would
-                    # be different (and maybe this should be detected as an
-                    # error) but if they are the same then the same handler
-                    # will eventually be chosen.
-                    if overload.virtual_catcher_code is None:
-                        overload.virtual_catcher_code = virtual_overload.overload.virtual_catcher_code
-
-                    # Use the base implementation's virtual error handler if
-                    # one isn't explicitly specified.
-                    if overload.virtual_error_handler is None:
-                        overload.virtual_error_handler = virtual_overload.overload.virtual_error_handler
-
-                    _add_virtual_overload(spec, overload, klass, error_log)
+                    # Check that it re-implements rather than hides.
+                    if _same_cpp_overload(spec, virtual_overload.overload, overload):
+                        _add_virtual_overload_reimplementation(spec, overload,
+                                virtual_overload, klass, error_log)
 
             # Add it if it wasn't explicitly mentioned in the class.
             if implicit:
@@ -1026,9 +1008,36 @@ def _get_virtuals(spec, klass, error_log):
                         error_log)
 
     # Handle any new virtuals.
-    for overload in klass.overloads:
-        if overload.is_virtual and not overload.is_virtual_reimplementation and not overload.is_final:
-            _add_virtual_overload(spec, overload, klass, error_log)
+    for member in klass.members:
+        for overload in member.overloads:
+            if overload.is_virtual and not overload.is_virtual_reimplementation and not overload.is_final:
+                _add_virtual_overload(spec, overload, klass, error_log)
+
+
+def _add_virtual_overload_reimplementation(spec, overload, virtual_overload,
+        klass, error_log):
+    """ Add an overload reimplemetation to the list of virtuals for a class.
+    """
+
+    # What if is is private?
+    overload.is_virtual = True
+    overload.is_virtual_reimplementation = True
+
+    # Use the base implementation's virtual handler code if there is any.  We
+    # cannot just use its virtual handler because this re-implementation may
+    # have different annotations which means the complete handler would be
+    # different.  In practice there is no reason why it would be different (and
+    # maybe this should be detected as an error) but if they are the same then
+    # the same handler will eventually be chosen.
+    if overload.virtual_catcher_code is None:
+        overload.virtual_catcher_code = virtual_overload.overload.virtual_catcher_code
+
+    # Use the base implementation's virtual error handler if one isn't
+    # explicitly specified.
+    if overload.virtual_error_handler is None:
+        overload.virtual_error_handler = virtual_overload.overload.virtual_error_handler
+
+    _add_virtual_overload(spec, overload, klass, error_log)
 
 
 def _add_virtual_overload(spec, overload, klass, error_log):
@@ -1144,7 +1153,7 @@ def _check_virtual_handler(spec, overload, virtual_handler):
         if virtual_handler.virtual_error_handler is None or overload.virtual_error_handler != virtual_handler.virtual_error_handler.name:
             return False
 
-    if (overload.factory or overload.transfer is Transfer.TRANSFER_BACK) and  not virtual_handler.transfer_result:
+    if (overload.factory or overload.transfer is Transfer.TRANSFER_BACK) and not virtual_handler.transfer_result:
         return False
 
     if overload.abort_on_exception is not virtual_handler.abort_on_exception:

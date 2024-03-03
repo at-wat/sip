@@ -42,7 +42,7 @@ def output_xml(spec, module_name):
     _variables(root, spec, module)
 
     for member in module.global_functions:
-        _function(root, spec, member, module.overloads)
+        _function(root, spec, member)
 
     return root
 
@@ -111,7 +111,7 @@ def _class(parent, spec, module, klass):
     _variables(parent_klass, spec, module, klass)
 
     for member in klass.members:
-        _function(parent_klass, spec, member, klass.overloads, klass)
+        _function(parent_klass, spec, member, klass)
 
 
 def _enums(parent, spec, module, scope=None):
@@ -180,11 +180,11 @@ def _ctor(parent, spec, scope, ctor):
             _argument(function_el, spec, arg, ctor.kw_args, out=True)
 
 
-def _function(parent, spec, member, overloads, scope=None):
+def _function(parent, spec, member, scope=None):
     """ Output the XML for a function. """
 
-    for overload in overloads:
-        if overload.common is member and overload.access_specifier is not AccessSpecifier.PRIVATE:
+    for overload in member.overloads:
+        if overload.access_specifier is not AccessSpecifier.PRIVATE:
             # XXX - need undocumented extension calls
             if overload.pyqt_is_signal:
                 attrib = {}

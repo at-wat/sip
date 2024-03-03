@@ -17,7 +17,7 @@ from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, CodeBlock, DocstringSignature, GILAction, IfaceFileType,
         KwArgs, MappedType, PySlot, QualifierType, Transfer, ValueType,
         WrappedClass, WrappedEnum)
-from ..utils import find_method, py_as_int, same_signature
+from ..utils import py_as_int, same_signature
 
 from .formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
         fmt_class_as_scoped_name, fmt_copying, fmt_docstring,
@@ -574,11 +574,9 @@ void sipVEH_{module_name}_{virtual_error_handler.name}(sipSimpleWrapper *{self_n
         else:
             # Make sure that there is still an overload and we haven't moved
             # them all to classes.
-            for overload in module.overloads:
-                if overload.common is member:
-                    _py_slot(sf, spec, bindings, member)
-                    slot_extenders = True
-                    break
+            if member.overloads:
+                _py_slot(sf, spec, bindings, member)
+                slot_extenders = True
 
     # Generate the global functions for any hidden namespaces.
     for klass in spec.classes:
@@ -627,18 +625,12 @@ f'''    {{{first_field}SIP_NULLPTR, {{0, 0, 0}}, SIP_NULLPTR}}
 static sipPySlotExtenderDef slotExtenders[] = {\n''')
 
         for member in module.global_functions:
-            if member.py_slot is None:
-                continue
+            if member.py_slot is not None and member.overloads:
+                member_name = member.py_name
+                slot_name = _get_slot_name(member.py_slot)
 
-            for overload in module.overloads:
-                if overload.common is member:
-                    member_name = member.py_name
-                    slot_name = _get_slot_name(member.py_slot)
-
-                    sf.write(
+                sf.write(
 f'    {{(void *)slot_{member_name}, {slot_name}, {{0, 0, 0}}}},\n')
-
-                    break
 
         for klass in module.proxies:
             for member in klass.members:
@@ -1581,21 +1573,18 @@ def _ordinary_function(sf, spec, bindings, member, scope=None):
     member_name = member.py_name.name
 
     if scope is None:
-        overloads = spec.module.overloads
         py_scope = None
         py_scope_prefix = ''
     else:
-        overloads = scope.overloads
         py_scope = _py_scope(scope)
         py_scope_prefix = '' if py_scope is None else py_scope.iface_file.fq_cpp_name.as_word + '_'
 
     sf.write('\n\n')
 
     # Generate the docstrings.
-    if _has_member_docstring(bindings, member, overloads):
+    if _has_member_docstring(bindings, member):
         sf.write(f'PyDoc_STRVAR(doc_{py_scope_prefix}{member_name}, "')
-        has_auto_docstring = _member_docstring(sf, spec, bindings, member,
-                overloads)
+        has_auto_docstring = _member_docstring(sf, spec, bindings, member)
         sf.write('");\n\n')
     else:
         has_auto_docstring = False
@@ -1627,10 +1616,7 @@ def _ordinary_function(sf, spec, bindings, member, scope=None):
 
     need_intro = True
 
-    for overload in overloads:
-        if overload.common is not member:
-            continue
-
+    for overload in member.overloads:
         if member.no_arg_parser:
             sf.write_code(overload.method_code)
             break
@@ -2442,21 +2428,23 @@ def _get_method_table(klass):
     members = []
 
     for visible_member in klass.visible_members:
-        if visible_member.member.py_slot is not None:
+        member = visible_member.member
+
+        if member.py_slot is not None:
             continue
 
         need_member = False
 
-        for overload in visible_member.scope.overloads:
+        for overload in member.overloads:
             # Skip protected methods if we don't have the means to handle them.
             if overload.access_specifier is AccessSpecifier.PROTECTED and not klass.has_shadow:
                 continue
 
-            if not _skip_overload(overload, visible_member.member, klass, visible_member.scope):
+            if not _skip_overload(overload, klass, visible_member):
                 need_member = True
 
         if need_member:
-            members.append(visible_member.member)
+            members.append(member)
 
     return _get_function_table(members)
 
@@ -2493,10 +2481,7 @@ def _py_method_table(sf, spec, bindings, members, scope):
 
     no_intro = True
 
-    for member_nr, member in enumerate(members):
-        # Save the index in the table.
-        member.member_nr = member_nr
-
+    for member in members:
         py_name = member.py_name
         cached_py_name = _cached_name_ref(py_name)
         comma = '' if member is members[-1] else ','
@@ -2510,7 +2495,7 @@ def _py_method_table(sf, spec, bindings, members, scope):
             cast_suffix = ''
             flags = ''
 
-        if _has_member_docstring(bindings, member, scope.overloads):
+        if _has_member_docstring(bindings, member):
             docstring = f'doc_{scope_name}_{py_name.name}'
         else:
             docstring = 'SIP_NULLPTR'
@@ -3208,17 +3193,14 @@ def _py_slot(sf, spec, bindings, member, scope=None):
         prefix = ''
         py_name = None
         fq_cpp_name = None
-        overloads = spec.module.overloads
     elif isinstance(scope, WrappedEnum):
         prefix = 'Type'
         py_name = scope.py_name
         fq_cpp_name = scope.fq_cpp_name
-        overloads = scope.overloads
     else:
         prefix = 'Type'
         py_name = scope.py_name
         fq_cpp_name = scope.iface_file.fq_cpp_name
-        overloads = scope.overloads
 
     if is_void_return_slot(member.py_slot) or is_int_return_slot(member.py_slot):
         ret_type = 'int '
@@ -3280,9 +3262,8 @@ def _py_slot(sf, spec, bindings, member, scope=None):
     sf.write(f'{slot_decl}{member.py_name.name}({arg_str})\n{{\n')
 
     if member.py_slot is PySlot.CALL and member.no_arg_parser:
-        for overload in overloads:
-            if overload.common is member:
-                sf.write_code(overload.method_code)
+        for overload in member.overloads:
+            sf.write_code(overload.method_code)
     else:
         if is_inplace_number_slot(member.py_slot):
             sf.write(
@@ -3316,19 +3297,18 @@ f'''    {as_cpp} sipCpp = static_cast<{as_cpp}>(sipConvertToEnum(sipSelf, {gto_n
         if has_args:
             sf.write('    PyObject *sipParseErr = SIP_NULLPTR;\n')
 
-        for overload in overloads:
-            if overload.common is member and overload.is_abstract:
+        for overload in member.overloads:
+            if overload.is_abstract:
                 sf.write('    PyObject *sipOrigSelf = sipSelf;\n')
                 break
 
         scope_not_enum = not isinstance(scope, WrappedEnum)
 
-        for overload in overloads:
-            if overload.common is member:
-                dereferenced = scope_not_enum and not overload.dont_deref_self
+        for overload in member.overloads:
+            dereferenced = scope_not_enum and not overload.dont_deref_self
 
-                _function_body(sf, spec, bindings, scope, overload,
-                        dereferenced=dereferenced)
+            _function_body(sf, spec, bindings, scope, overload,
+                    dereferenced=dereferenced)
 
         if has_args:
             if member.py_slot in (PySlot.CONCAT, PySlot.ICONCAT, PySlot.REPEAT, PySlot.IREPEAT):
@@ -3417,8 +3397,7 @@ def _class_functions(sf, spec, bindings, klass):
     # The member functions.
     for visible_member in klass.visible_members:
         if visible_member.member.py_slot is None:
-            _member_function(sf, spec, bindings, klass, visible_member.member,
-                    visible_member.scope)
+            _member_function(sf, spec, bindings, klass, visible_member)
 
     # The slot functions.
     for member in klass.members:
@@ -4313,11 +4292,13 @@ def _protected_declarations(sf, spec, klass):
     no_intro = True
 
     for visible_member in klass.visible_members:
-        if visible_member.member.py_slot is not None:
+        member = visible_member.member
+
+        if member.py_slot is not None:
             continue
 
-        for overload in visible_member.scope.overloads:
-            if overload.common is not visible_member.member or overload.access_specifier is not AccessSpecifier.PROTECTED:
+        for overload in member.overloads:
+            if overload.access_specifier is not AccessSpecifier.PROTECTED:
                 continue
 
             # Check we haven't already handled this signature (eg. if we have
@@ -4367,11 +4348,13 @@ def _protected_definitions(sf, spec, klass):
     klass_name = klass.iface_file.fq_cpp_name.as_word
 
     for visible_member in klass.visible_members:
-        if visible_member.member.py_slot is not None:
+        member = visible_member.member
+
+        if member.py_slot is not None:
             continue
 
-        for overload in visible_member.scope.overloads:
-            if overload.common is not visible_member.member or overload.access_specifier is not AccessSpecifier.PROTECTED:
+        for overload in member.overloads:
+            if overload.access_specifier is not AccessSpecifier.PROTECTED:
                 continue
 
             # Check we haven't already handled this signature (eg. if we have
@@ -4435,11 +4418,13 @@ def _is_duplicate_protected(spec, klass, target_overload):
     """ Return True if a protected method is a duplicate. """
 
     for visible_member in klass.visible_members:
-        if visible_member.member.py_slot is not None:
+        member = visible_member.member
+
+        if member.py_slot is not None:
             continue
 
-        for overload in visible_member.scope.overloads:
-            if overload.common is not visible_member.member or overload.access_specifier is not AccessSpecifier.PROTECTED:
+        for overload in member.overloads:
+            if overload.access_specifier is not AccessSpecifier.PROTECTED:
                 continue
 
             if overload is target_overload:
@@ -5623,13 +5608,13 @@ static sipPySlotDef slots_{klass_name}[] = {{
     for prop in klass.properties:
         fields = ['PropertyVariable', _cached_name_ref(prop.name)]
 
-        getter_nr = find_method(klass, prop.getter).member_nr
+        getter_nr = _find_method_index(klass, prop.getter)
         fields.append(f'&methods_{klass_name}[{getter_nr}]')
 
         if prop.setter is None:
             fields.append('SIP_NULLPTR')
         else:
-            setter_nr = find_method(klass, prop.setter).member_nr
+            setter_nr = _find_method_index(klass, prop.setter)
             fields.append(f'&methods_{klass_name}[{setter_nr}]')
 
         # We don't support a deleter yet.
@@ -5881,6 +5866,18 @@ sipClassTypeDef sipTypeDef_{module.py_name}_{klass_name} = {{
 ''')
 
 
+def _find_method_index(klass, name):
+    """ Return the index of the Member object for a named member of a class or
+    -1 if there was none.
+    """
+
+    for member_index, member in enumerate(klass.members):
+        if member.py_name.name == name:
+            return member_index
+
+    return -1
+
+
 def _class_object_ref(test, object_name, klass_name):
     """ Return an appropriate reference to a class-specific object. """
 
@@ -5909,8 +5906,8 @@ def _pyqt_emitters(sf, spec, klass):
     for member in klass.members:
         in_emitter = False
 
-        for overload in klass.overloads:
-            if not (overload.common is member and overload.pyqt_is_signal and _has_optional_args(overload)):
+        for overload in member.overloads:
+            if not (overload.pyqt_is_signal and _has_optional_args(overload)):
                 continue
 
             if not in_emitter:
@@ -6421,12 +6418,8 @@ f'''            if (sipDeprecated({_cached_name_ref(klass.py_name)}, SIP_NULLPTR
     sf.write('        }\n')
 
 
-def _skip_overload(overload, member, klass, scope, want_local=True):
+def _skip_overload(overload, klass, visible_member, want_local=True):
     """ See if a member overload should be skipped. """
-
-    # Skip if it's not the right name.
-    if overload.common is not member:
-        return True
 
     # Skip if it's a signal.
     if overload.pyqt_is_signal:
@@ -6438,14 +6431,16 @@ def _skip_overload(overload, member, klass, scope, want_local=True):
 
     # If we are disallowing them, skip if it's not in the current class unless
     # it is protected.
-    if want_local and overload.access_specifier is not AccessSpecifier.PROTECTED and klass is not scope:
+    if want_local and overload.access_specifier is not AccessSpecifier.PROTECTED and klass is not visible_member.scope:
         return True
 
     return False
 
 
-def _member_function(sf, spec, bindings, klass, member, original_klass):
+def _member_function(sf, spec, bindings, klass, visible_member):
     """ Generate a class member function. """
+
+    member = visible_member.member
 
     # Check that there is at least one overload that needs to be handled.  See
     # if we can avoid naming the "self" argument (and suppress a compiler
@@ -6453,12 +6448,12 @@ def _member_function(sf, spec, bindings, klass, member, original_klass):
     # an argument.  See if we need to handle keyword arguments.
     need_method = need_self = need_args = need_selfarg = need_orig_self = False
 
-    for overload in original_klass.overloads:
+    for overload in member.overloads:
         # Skip protected methods if we don't have the means to handle them.
         if overload.access_specifier is AccessSpecifier.PROTECTED and not klass.has_shadow:
             continue
 
-        if not _skip_overload(overload, member, klass, original_klass):
+        if not _skip_overload(overload, klass, visible_member):
             need_method = True
 
             if overload.access_specifier is not AccessSpecifier.PRIVATE:
@@ -6482,11 +6477,10 @@ def _member_function(sf, spec, bindings, klass, member, original_klass):
     sf.write('\n\n')
 
     # Generate the docstrings.
-    if _has_member_docstring(bindings, member, original_klass.overloads):
+    if _has_member_docstring(bindings, member):
         sf.write(f'PyDoc_STRVAR(doc_{klass_name}_{member_py_name}, "')
 
         has_auto_docstring = _member_docstring(sf, spec, bindings, member,
-                original_klass.overloads,
                 is_method=not klass.is_hidden_namespace)
 
         sf.write('");\n\n')
@@ -6548,9 +6542,9 @@ def _member_function(sf, spec, bindings, klass, member, original_klass):
             # implementation can be put in a mixin and it will all work.
             sf.write('    PyObject *sipOrigSelf = sipSelf;\n')
 
-    for overload in original_klass.overloads:
+    for overload in member.overloads:
         # If we are handling one variant then we must handle them all.
-        if _skip_overload(overload, member, klass, original_klass, want_local=False):
+        if _skip_overload(overload, klass, visible_member, want_local=False):
             continue
 
         if overload.access_specifier is AccessSpecifier.PRIVATE:
@@ -6561,7 +6555,7 @@ def _member_function(sf, spec, bindings, klass, member, original_klass):
             break
 
         _function_body(sf, spec, bindings, klass, overload,
-                original_klass=original_klass)
+                original_klass=visible_member.scope)
 
     if not member.no_arg_parser:
         sip_parse_err = 'sipParseErr' if need_args else 'SIP_NULLPTR'
@@ -8313,14 +8307,14 @@ def _get_encoding(type):
     return encoding
 
 
-def _has_member_docstring(bindings, member, overloads):
+def _has_member_docstring(bindings, member):
     """ Return True if a function/method has a docstring. """
 
     auto_docstring = False
 
     # Check for any explicit docstrings and remember if there were any that
     # could be automatically generated.
-    for overload in _callable_overloads(member, overloads):
+    for overload in _callable_overloads(member):
         if overload.docstring is not None:
             return True
 
@@ -8333,7 +8327,7 @@ def _has_member_docstring(bindings, member, overloads):
     return auto_docstring
 
 
-def _member_docstring(sf, spec, bindings, member, overloads, is_method=False):
+def _member_docstring(sf, spec, bindings, member, is_method=False):
     """ Generate the docstring for all overloads of a function/method.  Return
     True if the docstring was entirely automatically generated.
     """
@@ -8346,7 +8340,7 @@ def _member_docstring(sf, spec, bindings, member, overloads, is_method=False):
     all_auto = True
     any_implied = False
 
-    for overload in _callable_overloads(member, overloads):
+    for overload in _callable_overloads(member):
         if overload.docstring is not None:
             all_auto = False
 
@@ -8356,7 +8350,7 @@ def _member_docstring(sf, spec, bindings, member, overloads, is_method=False):
     # Generate the docstring.
     is_first = True
 
-    for overload in _callable_overloads(member, overloads):
+    for overload in _callable_overloads(member):
         if not is_first:
             sf.write(NEWLINE)
 
@@ -8541,17 +8535,15 @@ def _pyqt_plugin_signals_table(sf, spec, bindings, klass):
     is_signals = False
 
     # The signals must be grouped by name.
-    for member in klass.members:
-        member_nr = member.member_nr
-
-        for overload in klass.overloads:
-            if overload.common is not member or not overload.pyqt_is_signal:
+    for member_nr, member in enumerate(klass.members):
+        for overload in member.overloads:
+            if not overload.pyqt_is_signal:
                 continue
 
             if member_nr >= 0:
                 # See if there is a non-signal overload.
-                for non_sig in klass.overloads:
-                    if non_sig is not overload and non_sig.common is member and not non_sig.pyqt_is_signal:
+                for non_sig in member.overloads:
+                    if non_sig is not overload and not non_sig.pyqt_is_signal:
                         break
                 else:
                     member_nr = -1
@@ -8647,9 +8639,7 @@ def _global_function_table_entries(sf, spec, bindings, members):
             else:
                 sf.write(f'func_{member.py_name.name}, METH_VARARGS')
 
-            docstring = _optional_ptr(
-                    _has_member_docstring(bindings, member,
-                            spec.module.overloads),
+            docstring = _optional_ptr(_has_member_docstring(bindings, member),
                     'doc_' + member.py_name.name)
             sf.write(f', {docstring}}},\n')
 
@@ -8857,11 +8847,12 @@ def _const_cast(spec, type, value):
     return value
 
 
-def _callable_overloads(member, overloads):
+def _callable_overloads(member):
     """ An iterator over the non-private and non-signal overloads. """
 
-    for overload in overloads:
-        if overload.common is member and overload.access_specifier is not AccessSpecifier.PRIVATE and not overload.pyqt_is_signal:
+    for overload in member.overloads:
+        # XXX
+        if overload.access_specifier is not AccessSpecifier.PRIVATE and not overload.pyqt_is_signal:
             yield overload
 
 

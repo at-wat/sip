@@ -861,9 +861,6 @@ class MappedType(Extendable):
     # Set if /NoRelease/ was specified.
     no_release: bool = False
 
-    # The overloaded member functions.
-    overloads: List['Overload'] = field(default_factory=list)
-
     # The Python name.  It will be None for mapped type templates.
     py_name: Optional[CachedName] = None
 
@@ -919,14 +916,14 @@ class Member:
     # Set if /Sequence/ was specified.
     is_sequence: bool = False
 
-    # The number of the member. (outputter)
-    member_nr: int = -1
-
     # The original interface file if the function was defined in a namespace.
     namespace_iface_file: Optional[IfaceFile] = None
 
     # Set if /NoArgParser/ was specified.
     no_arg_parser: bool = False
+
+    # The overloaded member functions.
+    overloads: List['Overload'] = field(default_factory=list)
 
     # The Python slot if it is not an ordinary member function.
     py_slot: Optional[PySlot] = None
@@ -1006,9 +1003,6 @@ class Module:
 
     # The number of virtual error handlers defined in this module. (resolver)
     nr_virtual_error_handlers: int = 0
-
-    # The overloaded global functions.
-    overloads: List['Overload'] = field(default_factory=list)
 
     # The code specified by any %PostInitialisationCode directives.
     postinitialisation_code: List[CodeBlock] = field(default_factory=list)
@@ -1589,9 +1583,6 @@ class WrappedClass(Extendable):
     # instantiated template name should be used instead).
     no_type_name: bool = False
 
-    # The overloaded methods.
-    overloads: List[Overload] = field(default_factory=list)
-
     # The %PickleCode.
     pickle_code: Optional[CodeBlock] = None
 
@@ -1690,9 +1681,6 @@ class WrappedEnum(Extendable):
 
     # Set if the type hint should be suppressed.
     no_type_hint: bool = False
-
-    # The overloaded slot member functions. (resolver)
-    overloads: List['Overload'] = field(default_factory=list)
 
     # The Python name.
     py_name: Optional[CachedName] = None

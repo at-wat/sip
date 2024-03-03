@@ -13,9 +13,9 @@ from .specification import GILAction, MappedType, Module, WrappedClass
 class BuildSystemExtension:
     """ The base class for a build system extension.  An extension uses opaque
     representations of a scope (either a module, class or mapped type), an
-    exception, a function, a function group (a sequence of overloaded
-    functions), a ctor, a dtor, a union, a namespace, a typedef, an argument, a
-    variable, an enum and an enum member.
+    exception, a function, a function group (a sequence of functions with the
+    same Python name), a ctor, a dtor, a union, a namespace, a typedef, an
+    argument, a variable, an enum and an enum member.
     """
 
     def __init__(self, name, bindings, spec):
@@ -67,6 +67,7 @@ class BuildSystemExtension:
         """ Return the fully qualified C++ name of a class. """
 
         # XXX - have a fq option? similar for all get of names?
+        # XXX - still needed?
         return klass.iface_file.fq_cpp_name.as_cpp
 
     @staticmethod
@@ -295,7 +296,8 @@ class BuildSystemExtension:
 
         return False
 
-    def function_group_complete_definition(self, function_group, scope):
+    def function_group_complete_definition(self, function_group, scope,
+            function_group_name):
         """ Update a function group after it has been defined. """
 
         pass

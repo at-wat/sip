@@ -17,7 +17,7 @@ from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, CodeBlock, DocstringSignature, GILAction, IfaceFileType,
         KwArgs, MappedType, PySlot, QualifierType, Transfer, ValueType,
         WrappedClass, WrappedEnum)
-from ..utils import (get_py_scope, get_py_scope_prefix, py_as_int,
+from ..utils import (get_py_scope, get_py_struct_name, py_as_int,
         same_signature)
 
 from .formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
@@ -1571,20 +1571,21 @@ def _encoded_type(module, klass, last=False):
 def _ordinary_function(sf, spec, bindings, member, scope=None):
     """ Generate an ordinary function. """
 
-    member_name = member.py_name.name
-
-    py_scope = get_py_scope(scope)
-    py_scope_prefix = get_py_scope_prefix(py_scope)
-
     sf.write('\n\n')
 
     # Generate the docstrings.
-    if _has_member_docstring(bindings, member):
-        sf.write(f'PyDoc_STRVAR(doc_{py_scope_prefix}{member_name}, "')
-        has_auto_docstring = _member_docstring(sf, spec, bindings, member)
-        sf.write('");\n\n')
+    overloads = _callable_overloads(member)
+
+    if _has_member_docstring(bindings, member, overloads):
+        docstring_ref, has_auto_docstring = member_docstring(sf, spec,
+                bindings, scope, overloads)
+        sf.write('\n')
+
+        if not has_auto_docstring:
+            # Handwritten docstrings cannot be used in exception messages.
+            docstring_ref = 'SIP_NULLPTR'
     else:
-        has_auto_docstring = False
+        docstring_ref = 'SIP_NULLPTR'
 
     if member.no_arg_parser or member.allow_keyword_args:
         kw_fw_decl = ', PyObject *'
@@ -1594,20 +1595,24 @@ def _ordinary_function(sf, spec, bindings, member, scope=None):
 
     sip_self_unused = False
 
-    if py_scope is None:
+    if get_py_scope(scope) is None:
+        callable_ref = get_py_struct_name('func', scope, member.py_name.name)
+
         if not spec.c_bindings:
-            sf.write(f'extern "C" {{static PyObject *func_{member_name}(PyObject *, PyObject *{kw_fw_decl});}}\n')
+            sf.write(f'extern "C" {{static PyObject *{callable_ref}(PyObject *, PyObject *{kw_fw_decl});}}\n')
             sip_self = ''
         else:
             sip_self = 'sipSelf'
             sip_self_unused = True;
 
-        sf.write(f'static PyObject *func_{member_name}(PyObject *{sip_self}, PyObject *sipArgs{kw_decl})\n')
+        sf.write(f'static PyObject *{callable_ref}(PyObject *{sip_self}, PyObject *sipArgs{kw_decl})\n')
     else:
-        if not spec.c_bindings:
-            sf.write(f'extern "C" {{static PyObject *meth_{py_scope_prefix}{member_name}(PyObject *, PyObject *{kw_fw_decl});}}\n')
+        callable_ref = get_py_struct_name('meth', scope, member.py_name.name)
 
-        sf.write(f'static PyObject *meth_{py_scope_prefix}{member_name}(PyObject *, PyObject *sipArgs{kw_decl})\n')
+        if not spec.c_bindings:
+            sf.write(f'extern "C" {{static PyObject *{callable_ref}(PyObject *, PyObject *{kw_fw_decl});}}\n')
+
+        sf.write(f'static PyObject *{callable_ref}(PyObject *, PyObject *sipArgs{kw_decl})\n')
 
     sf.write('{\n')
 
@@ -1635,14 +1640,7 @@ def _ordinary_function(sf, spec, bindings, member, scope=None):
         sf.write(
 f'''
     /* Raise an exception if the arguments couldn't be parsed. */
-    sipNoFunction(sipParseErr, {_cached_name_ref(member.py_name)}, ''')
-
-        if has_auto_docstring:
-            sf.write(f'doc_{py_scope_prefix}{member_name}')
-        else:
-            sf.write('SIP_NULLPTR')
-
-        sf.write(''');
+    sipNoFunction(sipParseErr, {_cached_name_ref(member.py_name)}, {docstring_ref});
 
     return SIP_NULLPTR;
 ''')
@@ -2492,7 +2490,7 @@ def _py_method_table(sf, spec, bindings, members, scope):
             cast_suffix = ''
             flags = ''
 
-        if _has_member_docstring(bindings, member):
+        if _has_member_docstring(bindings, member, _callable_overloads(member)):
             docstring = f'doc_{scope_name}_{py_name.name}'
         else:
             docstring = 'SIP_NULLPTR'
@@ -6474,15 +6472,19 @@ def _member_function(sf, spec, bindings, klass, visible_member):
     sf.write('\n\n')
 
     # Generate the docstrings.
-    if _has_member_docstring(bindings, member):
-        sf.write(f'PyDoc_STRVAR(doc_{klass_name}_{member_py_name}, "')
+    overloads = _callable_overloads(member)
 
-        has_auto_docstring = _member_docstring(sf, spec, bindings, member,
+    if _has_member_docstring(bindings, member, overloads):
+        docstring_ref, has_auto_docstring = member_docstring(sf, spec,
+                bindings, klass, overloads,
                 is_method=not klass.is_hidden_namespace)
+        sf.write('\n')
 
-        sf.write('");\n\n')
+        if not has_auto_docstring:
+            # Handwritten docstrings cannot be used in exception messages.
+            docstring_ref = 'SIP_NULLPTR'
     else:
-        has_auto_docstring = False
+        docstring_ref = 'SIP_NULLPTR'
 
     if member.no_arg_parser or member.allow_keyword_args:
         arg3_type = ', PyObject *'
@@ -6558,7 +6560,6 @@ def _member_function(sf, spec, bindings, klass, visible_member):
         sip_parse_err = 'sipParseErr' if need_args else 'SIP_NULLPTR'
         klass_py_name_ref = _cached_name_ref(klass.py_name)
         member_py_name_ref = _cached_name_ref(member.py_name)
-        docstring_ref = f'doc_{klass_name}_{member_py_name}' if has_auto_docstring else 'SIP_NULLPTR'
 
         sf.write(
 f'''
@@ -8304,14 +8305,14 @@ def _get_encoding(type):
     return encoding
 
 
-def _has_member_docstring(bindings, member):
+def _has_member_docstring(bindings, member, overloads):
     """ Return True if a function/method has a docstring. """
 
     auto_docstring = False
 
     # Check for any explicit docstrings and remember if there were any that
     # could be automatically generated.
-    for overload in _callable_overloads(member):
+    for overload in overloads:
         if overload.docstring is not None:
             return True
 
@@ -8324,20 +8325,24 @@ def _has_member_docstring(bindings, member):
     return auto_docstring
 
 
-def _member_docstring(sf, spec, bindings, member, is_method=False):
+def member_docstring(sf, spec, bindings, scope, overloads, is_method=False,
+        prefix=''):
     """ Generate the docstring for all overloads of a function/method.  Return
-    True if the docstring was entirely automatically generated.
+    a 2-tuple of the reference to the generated Python struct and True if the
+    docstring was entirely automatically generated.
     """
 
     NEWLINE = '\\n"\n"'
 
+    docstring_ref = get_py_struct_name('doc', scope,
+            overloads[0].common.py_name.name, prefix=prefix);
     auto_docstring = True
 
     # See if all the docstrings are automatically generated.
     all_auto = True
     any_implied = False
 
-    for overload in _callable_overloads(member):
+    for overload in overloads:
         if overload.docstring is not None:
             all_auto = False
 
@@ -8345,9 +8350,11 @@ def _member_docstring(sf, spec, bindings, member, is_method=False):
                 any_implied = True
 
     # Generate the docstring.
+    sf.write(f'PyDoc_STRVAR({docstring_ref}, "')
+
     is_first = True
 
-    for overload in _callable_overloads(member):
+    for overload in overloads:
         if not is_first:
             sf.write(NEWLINE)
 
@@ -8373,7 +8380,9 @@ def _member_docstring(sf, spec, bindings, member, is_method=False):
 
         is_first = False
 
-    return auto_docstring
+    sf.write('");\n')
+
+    return docstring_ref, auto_docstring
 
 
 def _member_auto_docstring(sf, spec, bindings, overload, is_method):
@@ -8636,7 +8645,9 @@ def _global_function_table_entries(sf, spec, bindings, members):
             else:
                 sf.write(f'func_{member.py_name.name}, METH_VARARGS')
 
-            docstring = _optional_ptr(_has_member_docstring(bindings, member),
+            overloads = _callable_overloads(member)
+            docstring = _optional_ptr(
+                    _has_member_docstring(bindings, member, overloads),
                     'doc_' + member.py_name.name)
             sf.write(f', {docstring}}},\n')
 
@@ -8845,12 +8856,16 @@ def _const_cast(spec, type, value):
 
 
 def _callable_overloads(member):
-    """ An iterator over the non-private and non-signal overloads. """
+    """ Return a list of non-private and non-signal overloads. """
+
+    overloads = []
 
     for overload in member.overloads:
         # XXX
         if overload.access_specifier is not AccessSpecifier.PRIVATE and not overload.pyqt_is_signal:
-            yield overload
+            overloads.append(overload)
+
+    return overloads
 
 
 def _gto_name(wrapped_object):

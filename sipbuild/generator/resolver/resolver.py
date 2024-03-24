@@ -933,7 +933,7 @@ def _resolve_scope_overloads(spec, bindings, members, container, error_log,
 
         bindings.call_build_system_extensions(
                 'function_group_complete_definition', member.overloads,
-                container, member.py_name.name)
+                container)
 
 
 def _resolve_variables(spec, mod, error_log):

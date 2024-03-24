@@ -240,6 +240,17 @@ def get_py_scope_prefix(py_scope):
     return '' if py_scope is None else py_scope.iface_file.fq_cpp_name.as_word + '_'
 
 
+def get_py_struct_name(category, scope, thing, prefix=''):
+    """ Return the name of a generated Python structure for a particular
+    'thing' in a particular category.  For example category may be 'doc' or
+    'meth' and the thing would be the name of a method.
+    """
+
+    py_scope_prefix = get_py_scope_prefix(get_py_scope(scope))
+
+    return prefix + category + '_' + py_scope_prefix + thing
+
+
 def normalised_scoped_name(scoped_name, scope):
     """ Convert a scoped name to a fully qualified name. """
 

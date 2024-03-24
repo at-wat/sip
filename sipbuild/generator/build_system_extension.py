@@ -3,12 +3,14 @@
 # Copyright (c) 2024 Phil Thompson <phil@riverbankcomputing.com>
 
 
+from .outputs import member_docstring
 from .outputs.formatters import (fmt_argument_as_cpp_type, fmt_docstring,
         fmt_docstring_of_overload)
 from .parser import (InvalidAnnotation, validate_boolean, validate_integer,
         validate_string_list, validate_string)
-from .specification import GILAction, MappedType, Module, WrappedClass
-from .utils import get_py_scope, get_py_scope_prefix
+from .specification import (GILAction, MappedType, Module, Overload,
+        WrappedClass)
+from .utils import get_py_struct_name
 
 
 class BuildSystemExtension:
@@ -82,12 +84,13 @@ class BuildSystemExtension:
         return function.cpp_name
 
     @staticmethod
-    def get_function_group_bindings(function_group_name, scope):
-        """ Return the name of the generated function that implement the
+    def get_function_group_bindings(function_group, scope):
+        """ Return a reference to the generated function that implements the
         bindings of a function group.
         """
 
-        return 'meth_' + get_py_scope_prefix(get_py_scope(scope)) + function_group_name
+        return get_py_struct_name('meth', scope,
+                function_group[0].common.py_name.name)
 
     @staticmethod
     def parse_boolean_annotation(name, raw_value, location):
@@ -205,8 +208,8 @@ class BuildSystemExtension:
     def write_function_group_bindings(self, function_group, scope, output,
             prefix=''):
         """ Write the C/C++ function of type PyCFunction that implements the
-        bindings of a function group.  The name of the generated function
-        (preceeded with an optional prefix) is returned.
+        bindings of a function group.  Return a reference to the generated
+        function (preceded with an optional prefix).
         """
 
         # XXX
@@ -215,12 +218,13 @@ class BuildSystemExtension:
     def write_function_group_docstring(self, function_group, scope,
             output, prefix=''):
         """ Write the PyDoc_STRVAR() call that implements the docstring of a
-        function group.  The name of the generated C object (preceeded with an
-        optional prefix) is returned.
+        function group.  Return a 2-tuple of a reference to the generated C
+        object (preceded with an optional prefix) and a flag which is set if
+        the entire docstring was generated automatically.
         """
 
-        # XXX
-        return ''
+        return member_docstring(output, self._spec, self.bindings, scope,
+                function_group, prefix=prefix)
 
     # The rest of the class are the stubs to be re-implemented by sub-classes.
     # There is a naming convention that splits the name into three broad
@@ -308,8 +312,7 @@ class BuildSystemExtension:
 
         return False
 
-    def function_group_complete_definition(self, function_group, scope,
-            function_group_name):
+    def function_group_complete_definition(self, function_group, scope):
         """ Update a function group after it has been defined. """
 
         pass

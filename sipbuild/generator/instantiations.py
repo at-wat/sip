@@ -246,7 +246,8 @@ def _instantiate_enums(tmpl_names, proto_class, template, i_class, expansions,
         if proto_enum.scope is not proto_class:
             continue
 
-        # Start with a shallow copy.
+        # Start with a shallow copy.  Note that we don't instantiate the slots
+        # as there won't be any at this point.
         i_enum = copy(proto_enum)
 
         if proto_enum.fq_cpp_name is not None:
@@ -273,10 +274,6 @@ def _instantiate_enums(tmpl_names, proto_class, template, i_class, expansions,
             w_member.scope = i_enum
 
             i_enum.members.append(w_member)
-
-        i_enum_members = _instantiate_methods(proto_enum.members,
-                i_enum.module, tmpl_names, proto_class, template, i_class,
-                expansions, pm)
 
         pm.spec.enums.insert(0, i_enum)
 

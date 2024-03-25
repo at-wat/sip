@@ -2423,23 +2423,21 @@ def _get_method_table(klass):
     members = []
 
     for visible_member in klass.visible_members:
-        member = visible_member.member
-
-        if member.py_slot is not None:
+        if visible_member.py_slot is not None:
             continue
 
         need_member = False
 
-        for overload in member.overloads:
+        for overload in visible_member.overloads:
             # Skip protected methods if we don't have the means to handle them.
             if overload.access_specifier is AccessSpecifier.PROTECTED and not klass.has_shadow:
                 continue
 
-            if not _skip_overload(overload, klass, visible_member):
+            if not _skip_overload(overload, klass):
                 need_member = True
 
         if need_member:
-            members.append(member)
+            members.append(visible_member)
 
     return _get_function_table(members)
 
@@ -3391,10 +3389,10 @@ def _class_functions(sf, spec, bindings, klass):
 
     # The member functions.
     for visible_member in klass.visible_members:
-        if visible_member.member.py_slot is None:
+        if visible_member.py_slot is None:
             _member_function(sf, spec, bindings, klass, visible_member)
 
-    # The slot functions.
+    # The namespace and slot functions.
     for member in klass.members:
         if klass.iface_file.type is IfaceFileType.NAMESPACE:
             _ordinary_function(sf, spec, bindings, member, scope=klass)
@@ -4287,12 +4285,10 @@ def _protected_declarations(sf, spec, klass):
     no_intro = True
 
     for visible_member in klass.visible_members:
-        member = visible_member.member
-
-        if member.py_slot is not None:
+        if visible_member.py_slot is not None:
             continue
 
-        for overload in member.overloads:
+        for overload in visible_member.overloads:
             if overload.access_specifier is not AccessSpecifier.PROTECTED:
                 continue
 
@@ -4343,12 +4339,10 @@ def _protected_definitions(sf, spec, klass):
     klass_name = klass.iface_file.fq_cpp_name.as_word
 
     for visible_member in klass.visible_members:
-        member = visible_member.member
-
-        if member.py_slot is not None:
+        if visible_member.py_slot is not None:
             continue
 
-        for overload in member.overloads:
+        for overload in visible_member.overloads:
             if overload.access_specifier is not AccessSpecifier.PROTECTED:
                 continue
 
@@ -4398,7 +4392,8 @@ def _protected_definitions(sf, spec, klass):
                     overload.cpp_signature)
 
             if not overload.is_abstract:
-                visible_scope_s = _scoped_class_name(spec, visible_member.scope)
+                visible_scope_s = _scoped_class_name(spec,
+                        visible_member.scope)
 
                 if overload.is_virtual or overload.is_virtual_reimplementation:
                     sf.write(f'(sipSelfWasArg ? {visible_scope_s}::{overload_name}({protected_call_args}) : ')
@@ -4413,12 +4408,10 @@ def _is_duplicate_protected(spec, klass, target_overload):
     """ Return True if a protected method is a duplicate. """
 
     for visible_member in klass.visible_members:
-        member = visible_member.member
-
-        if member.py_slot is not None:
+        if visible_member.py_slot is not None:
             continue
 
-        for overload in member.overloads:
+        for overload in visible_member.overloads:
             if overload.access_specifier is not AccessSpecifier.PROTECTED:
                 continue
 
@@ -6413,8 +6406,8 @@ f'''            if (sipDeprecated({_cached_name_ref(klass.py_name)}, SIP_NULLPTR
     sf.write('        }\n')
 
 
-def _skip_overload(overload, klass, visible_member, want_local=True):
-    """ See if a member overload should be skipped. """
+def _skip_overload(overload, klass, want_local=True):
+    """ See if an overload should be skipped. """
 
     # Skip if it's a signal.
     if overload.pyqt_is_signal:
@@ -6426,21 +6419,21 @@ def _skip_overload(overload, klass, visible_member, want_local=True):
 
     # If we are disallowing them, skip if it's not in the current class unless
     # it is protected.
-    if want_local and overload.access_specifier is not AccessSpecifier.PROTECTED and klass is not visible_member.scope:
+    if want_local and overload.access_specifier is not AccessSpecifier.PROTECTED and klass is not overload.common.scope:
         return True
 
     return False
 
 
-def _member_function(sf, spec, bindings, klass, visible_member):
+def _member_function(sf, spec, bindings, klass, member):
     """ Generate a class member function. """
 
-    member = visible_member.member
-
-    # Check that there is at least one overload that needs to be handled.  See
-    # if we can avoid naming the "self" argument (and suppress a compiler
-    # warning).  See if we need to remember if "self" was explicitly passed as
-    # an argument.  See if we need to handle keyword arguments.
+    # Check that there is at least one overload from this class that needs to
+    # be handled.  (If all visible overloads are defined in super-classes then
+    # we can leave it to a super-class to handle them.)  See if we can avoid
+    # naming the "self" argument (and suppress a compiler warning).  See if we
+    # need to remember if "self" was explicitly passed as an argument.  See if
+    # we need to handle keyword arguments.
     need_method = need_self = need_args = need_selfarg = need_orig_self = False
 
     for overload in member.overloads:
@@ -6448,7 +6441,7 @@ def _member_function(sf, spec, bindings, klass, visible_member):
         if overload.access_specifier is AccessSpecifier.PROTECTED and not klass.has_shadow:
             continue
 
-        if not _skip_overload(overload, klass, visible_member):
+        if not _skip_overload(overload, klass):
             need_method = True
 
             if overload.access_specifier is not AccessSpecifier.PRIVATE:
@@ -6542,8 +6535,9 @@ def _member_function(sf, spec, bindings, klass, visible_member):
             sf.write('    PyObject *sipOrigSelf = sipSelf;\n')
 
     for overload in member.overloads:
-        # If we are handling one variant then we must handle them all.
-        if _skip_overload(overload, klass, visible_member, want_local=False):
+        # We must handle all visible overloads, not just those defined in this
+        # class.
+        if _skip_overload(overload, klass, want_local=False):
             continue
 
         if overload.access_specifier is AccessSpecifier.PRIVATE:
@@ -6554,7 +6548,7 @@ def _member_function(sf, spec, bindings, klass, visible_member):
             break
 
         _function_body(sf, spec, bindings, klass, overload,
-                original_klass=visible_member.scope)
+                original_klass=member.scope)
 
     if not member.no_arg_parser:
         sip_parse_err = 'sipParseErr' if need_args else 'SIP_NULLPTR'

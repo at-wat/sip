@@ -15,7 +15,7 @@ from ..scoped_name import ScopedName
 from ..specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, ClassKey, Constructor, IfaceFileType, MappedType,
         Member, PySlot, Signature, Transfer, ValueType, VirtualHandler,
-        VirtualOverload, VisibleMember, WrappedClass)
+        VirtualOverload, WrappedClass)
 from ..templates import (encoded_template_name, same_template_signature,
         template_code, template_code_blocks, template_expansions)
 from ..utils import (append_iface_file, argument_as_str, cached_name,
@@ -270,7 +270,7 @@ def _add_complementary_overloads(spec, klass, member, compl, compl_name):
                     break
             else:
                 member2 = Member(member.module, cached_name(spec, compl_name),
-                        py_slot=compl)
+                        py_slot=compl, scope=member.scope)
 
                 if member.py_name.used:
                     member2.py_name.used = True
@@ -434,19 +434,21 @@ def _move_global_slot(spec, global_slot, error_log):
         except IndexError:
             arg1 = None
 
+        arg_class = None
+        arg_enum = None
         arg_members = None
         arg_module = None
-        arg_enum = None
         is_second = False
 
         if arg0.type is ArgumentType.CLASS:
-            arg_members = arg0.definition.members
-            arg_module = arg0.definition.iface_file.module
+            arg_class = arg0.definition
+            arg_members = arg_class.members
+            arg_module = arg_class.iface_file.module
 
         elif arg0.type is ArgumentType.ENUM:
-            arg_members = arg0.definition.slots
-            arg_module = arg0.definition.module
             arg_enum = arg0.definition
+            arg_members = arg_enum.slots
+            arg_module = arg_enum.module
 
         elif arg1 is None:
             if arg0.type is ArgumentType.NONE:
@@ -458,14 +460,15 @@ def _move_global_slot(spec, global_slot, error_log):
             continue
 
         elif arg1.type is ArgumentType.CLASS:
-            arg_members = arg1.definition.members
-            arg_module = arg1.definition.iface_file.module
+            arg_class = arg1.definition
+            arg_members = arg_class.members
+            arg_module = arg_class.iface_file.module
             is_second = True
 
         elif arg1.type is ArgumentType.ENUM:
-            arg_members = arg1.definition.slots
-            arg_module = arg1.definition.module
             arg_enum = arg1.definition
+            arg_members = arg_enum.slots
+            arg_module = arg_enum.module
             is_second = True
 
         else:
@@ -536,8 +539,10 @@ def _move_global_slot(spec, global_slot, error_log):
             if arg_member.py_slot is global_slot.py_slot:
                 break
         else:
+            scope = arg_class if arg_class is not None else arg_enum
+
             arg_member = Member(arg_module, global_slot.py_name,
-                    py_slot=global_slot.py_slot)
+                    py_slot=global_slot.py_slot, scope=scope)
 
             arg_members.insert(0, arg_member)
 
@@ -620,6 +625,7 @@ def _add_auto_overload(spec, auto_klass, auto_overload):
                 else:
                     member = copy(auto_overload.common)
                     member.module = klass.iface_file.module
+                    member.scope = klass
                     klass.members.insert(0, member)
 
                 overload = copy(auto_overload)
@@ -954,11 +960,10 @@ def _get_visible_py_members(spec, klass):
             # closer to this class in the hierarchy.  This is the only reason
             # to define private functions.
             for visible_member in klass.visible_members:
-                if visible_member.member.py_name is member.py_name:
+                if visible_member.py_name is member.py_name:
                     break
             else:
-                visible_member = VisibleMember(member, mro_klass)
-                klass.visible_members.insert(0, visible_member)
+                klass.visible_members.insert(0, member)
 
                 for overload in member.overloads:
                     need_types = False
@@ -1848,6 +1853,8 @@ def _instantiate_mapped_type_template(spec, mod, mapped_type_template, type,
 
     proto_mapped_type = mapped_type_template.mapped_type
 
+    # Note that we don't support mapped type template methods (which require
+    # refactoring).  They are simply ignored.
     mapped_type.extension_data = proto_mapped_type.extension_data
     mapped_type.handles_none = proto_mapped_type.handles_none
     mapped_type.needs_user_state = proto_mapped_type.needs_user_state

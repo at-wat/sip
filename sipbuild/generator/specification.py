@@ -928,6 +928,9 @@ class Member:
     # The Python slot if it is not an ordinary member function.
     py_slot: Optional[PySlot] = None
 
+    # The enclosing scope.
+    scope: Optional[Union[MappedType, 'WrappedClass', 'WrappedEnum']] = None
+
 
 @dataclass
 class Module:
@@ -1423,17 +1426,6 @@ class VirtualOverload:
 
 
 @dataclass
-class VisibleMember:
-    """ Encapsulate a visible member function. (resolver) """
-
-    # The member function.
-    member: Member
-
-    # The defining class.
-    scope: 'WrappedClass'
-
-
-@dataclass
 class WrappedClass(Extendable):
     """ Encapsulate a wrapped C/C++ namespace/class/struct/union. """
 
@@ -1639,7 +1631,7 @@ class WrappedClass(Extendable):
     virtual_overloads: List[VirtualOverload] = field(default_factory=list)
 
     # The visible member functions. (resolver)
-    visible_members: List[VisibleMember] = field(default_factory=list)
+    visible_members: List[Member] = field(default_factory=list)
 
     def __hash__(self):
         """ Reimplemented so an Argument object can be used as a dict key. """

@@ -1942,6 +1942,7 @@ class ParserManager:
             member.namespace_iface_file = namespace_iface_file
             member.no_arg_parser = no_arg_parser
             member.py_slot = py_slot
+            member.scope = self.scope
 
             if self.in_main_module:
                 member.py_name.used = True

@@ -1221,10 +1221,8 @@ def p_plugin(p):
     if pm.skipping:
         return
 
-    # %Plugin is incompatible with build system extensions.
-    if pm.bindings.build_system_extensions:
-        pm.parser_error(p, 1,
-                "%Plugin cannot be used with build system extensions")
+    # %Plugin is incompatible with build system extensions so remove them.
+    pm.bindings.build_system_extensions = []
 
     pm.deprecated(p, 1)
 
@@ -2115,9 +2113,10 @@ def p_access_specifier(p):
         if primary is not None:
             break
     else:
+        pm.scope_pyqt_are_signals = False
+
         # See if it is a standard C++ access specifier.
         if p[1] in ('public', 'protected', 'private') and p[2] is None:
-            pm.scope_pyqt_are_signals = False
             primary = p[1]
         elif pm.spec.plugins:
             # See if it is a legacy plugin.

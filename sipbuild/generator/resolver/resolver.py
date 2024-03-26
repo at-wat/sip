@@ -963,7 +963,7 @@ def _get_visible_py_members(spec, klass):
                 if visible_member.py_name is member.py_name:
                     break
             else:
-                klass.visible_members.insert(0, member)
+                klass.visible_members.append(member)
 
                 for overload in member.overloads:
                     need_types = False

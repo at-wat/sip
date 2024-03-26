@@ -208,8 +208,7 @@ def find_iface_file(spec, mod, fq_cpp_name, iface_file_type, error_logger,
                 cpp_name=cached_name(spec, str(fq_cpp_name)),
                 fq_cpp_name=fq_cpp_name)
 
-    # Use the same ordering as the old parser.
-    spec.iface_files.insert(0, iff)
+    spec.iface_files.append(iff)
 
     return iff
 

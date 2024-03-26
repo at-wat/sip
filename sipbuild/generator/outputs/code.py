@@ -527,7 +527,6 @@ def _module_code(spec, bindings, buildable):
             _iface_file_cpp(spec, bindings, buildable, iface_file,
                     need_postinc, source_suffix, extension_data, use_sf)
 
-
     # If there should be a Qt support API then generate stubs values for the
     # optional parts.  These should be undefined in %ModuleCode if a C++
     # implementation is provided.
@@ -539,6 +538,7 @@ def _module_code(spec, bindings, buildable):
 #define sipQtEmitSignal                     0
 #define sipQtConnectPySignal                0
 #define sipQtDisconnectPySignal             0
+
 ''')
 
     # Generate the C++ code blocks.
@@ -2264,7 +2264,8 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
     for member in mapped_type.members:
         _ordinary_function(sf, spec, bindings, member, scope=mapped_type)
 
-    cod_nrmethods = _mapped_type_method_table(sf, bindings, spec, mapped_type)
+    cod_nrmethods = _py_method_table(sf, spec, bindings,
+            _get_sorted_members(mapped_type.members), mapped_type)
 
     id_int = 'SIP_NULLPTR'
 
@@ -2402,14 +2403,8 @@ f'''static PyObject *convertFrom_{name}(void *sipCppV, PyObject *{xfer})
     _type_definition(sf, spec, bindings, klass, extension_data)
 
 
-def _get_function_table(members):
-    """ Return a sorted list of relevant functions for a namespace. """
-
-    return sorted(members, key=lambda m: m.py_name.name)
-
-
-def _get_method_table(klass):
-    """ Return a sorted list of relevant methods (either lazy or non-lazy) for
+def _get_visible_members(klass):
+    """ Return a sorted list of relevant members (either lazy or non-lazy) for
     a class.
     """
 
@@ -2439,17 +2434,7 @@ def _get_method_table(klass):
         if need_member:
             members.append(visible_member)
 
-    return _get_function_table(members)
-
-
-def _mapped_type_method_table(sf, spec, bindings, mapped_type):
-    """ Generate the sorted table of static methods for a mapped type and
-    return the number of entries.
-    """
-
-    members = _get_function_table(mapped_type.members)
-
-    return _py_method_table(sf, spec, bindings, members, mapped_type)
+    return _get_sorted_members(members)
 
 
 def _class_method_table(sf, spec, bindings, klass):
@@ -2458,11 +2443,18 @@ def _class_method_table(sf, spec, bindings, klass):
     """
 
     if klass.iface_file.type is IfaceFileType.NAMESPACE:
-        members = _get_function_table(klass.members)
+        members = _get_sorted_members(klass.members)
     else:
-        members = _get_method_table(klass)
+        members = _get_visible_members(klass)
 
     return _py_method_table(sf, spec, bindings, members, klass)
+
+
+def _get_sorted_members(members):
+    """ Return a sorted list of members. """
+
+    # The entries are sorted by the method name.
+    return sorted(members, key=lambda m: m.py_name.name)
 
 
 def _py_method_table(sf, spec, bindings, members, scope):
@@ -8534,22 +8526,21 @@ def _pyqt_plugin_signals_table(sf, spec, bindings, klass):
 
     is_signals = False
 
-    # The signals must be grouped by name.
-    for member_nr, member in enumerate(klass.members):
+    # ZZZ - use a reversed list temporarily to make it easier to compare code
+    #for member in klass.members:
+    for member in reversed(klass.members):
+        # The signals must be grouped by name.
+        first_overload = True
+
         for overload in member.overloads:
             if not overload.pyqt_is_signal:
                 continue
 
-            if member_nr >= 0:
-                # See if there is a non-signal overload.
-                for non_sig in member.overloads:
-                    if non_sig is not overload and not non_sig.pyqt_is_signal:
-                        break
-                else:
-                    member_nr = -1
-
             if not is_signals:
                 is_signals = True
+
+                # Delay this until we know it is needed.
+                visible_members = _get_visible_members(klass)
 
                 _pyqt_emitters(sf, spec, klass)
 
@@ -8561,13 +8552,22 @@ f'''
 static const pyqt{pyqt_version}QtSignal signals_{klass.iface_file.fq_cpp_name.as_word}[] = {{
 ''')
 
+            member_nr = -1
+
+            if first_overload:
+                first_overload = False
+
+                # See if there is a non-signal overload.
+                for vm, visible_member in enumerate(visible_members):
+                    if member is visible_member:
+                        member_nr = vm
+                        break
+
             # We enable a hack that supplies any missing optional arguments.
             # We only include the version with all arguments and provide an
             # emitter function which handles the optional arguments.
             _pyqt_signal_table_entry(sf, spec, bindings, klass, overload,
                     member_nr)
-
-            member_nr = -1
 
     if is_signals:
         sf.write('    {SIP_NULLPTR, SIP_NULLPTR, SIP_NULLPTR, SIP_NULLPTR}\n};\n')

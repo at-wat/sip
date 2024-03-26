@@ -1947,7 +1947,7 @@ class ParserManager:
             if self.in_main_module:
                 member.py_name.used = True
 
-            members.insert(0, member)
+            members.append(member)
 
         return member
 

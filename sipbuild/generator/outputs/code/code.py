@@ -7776,9 +7776,7 @@ def _pyqt_plugin_signals_table(sf, spec, bindings, klass):
 
     is_signals = False
 
-    # ZZZ - use a reversed list temporarily to make it easier to compare code
-    #for member in klass.members:
-    for member in reversed(klass.members):
+    for member in klass.members:
         # The signals must be grouped by name.
         first_overload = True
 

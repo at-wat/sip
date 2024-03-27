@@ -9,7 +9,7 @@ from ...python_slots import (is_hash_return_slot, is_inplace_number_slot,
         is_zero_arg_slot)
 from ...scoped_name import STRIP_GLOBAL
 from ...specification import (AccessSpecifier, Argument, ArgumentType,
-        ArrayArgument, GILAction, IfaceFileType, PySlot, Transfer,
+        ArrayArgument, GILAction, IfaceFileType, MappedType, PySlot, Transfer,
         WrappedClass)
 from ...utils import get_py_scope, get_py_struct_name, py_as_int
 
@@ -19,7 +19,7 @@ from ..formatters import (fmt_argument_as_name, fmt_argument_as_cpp_type,
 from .argument_parser import argument_parser
 from .docstrings import has_member_docstring, member_docstring
 from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
-        is_string, is_used_in_code, type_needs_user_state, user_state_suffix)
+        is_string, is_used_in_code, type_needs_user_state)
 
 
 def overloads_bindings(sf, spec, bindings, scope, overloads, prefix=''):
@@ -49,7 +49,7 @@ def overloads_bindings(sf, spec, bindings, scope, overloads, prefix=''):
     else:
         docstring_ref = 'SIP_NULLPTR'
 
-    member = overload[0].common
+    member = overloads[0].common
 
     if member.no_arg_parser or member.allow_keyword_args:
         kw_fw_decl = ', PyObject *'
@@ -82,30 +82,28 @@ def overloads_bindings(sf, spec, bindings, scope, overloads, prefix=''):
 
         sf.write(f'static PyObject *{callable_ref}(PyObject *, PyObject *sipArgs{kw_decl})\n')
 
-    sf.write('''{
-    PyObject *sipParseErr = SIP_NULLPTR;
-''')
-
-    if sip_self_unused:
-        sf.write(
-'''
-    (void)sipSelf;
-''')
+    sf.write('{\n')
 
     if member.no_arg_parser:
-        sf.write_code(overload.method_code)
+        sf.write_code(overloads[0].method_code)
     else:
+        sf.write('    PyObject *sipParseErr = SIP_NULLPTR;\n')
+
+        if sip_self_unused:
+            sf.write('\n    (void)sipSelf;\n')
+
         for overload in overloads:
             _function_body(sf, spec, bindings, scope, overload)
 
-    sf.write(
+        sf.write(
 f'''
     /* Raise an exception if the arguments couldn't be parsed. */
     sipNoFunction(sipParseErr, {cached_name_ref(member.py_name)}, {docstring_ref});
 
     return SIP_NULLPTR;
-}
 ''')
+
+    sf.write('}\n')
 
 
 def _function_body(sf, spec, bindings, scope, overload, original_klass=None,

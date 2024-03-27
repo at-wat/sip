@@ -27,6 +27,7 @@ from ..formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
         fmt_signature_as_type_hint, fmt_value_list_as_cpp_expression)
 
 from .argument_parser import argument_parser
+from .callable_bindings import overloads_bindings
 from .docstrings import has_member_docstring, member_docstring
 from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
         get_normalised_cached_name, is_string, is_used_in_code,
@@ -1577,79 +1578,7 @@ def _ordinary_function(sf, spec, bindings, member, scope=None):
 
     sf.write('\n\n')
 
-    # Generate the docstrings.
-    overloads = _callable_overloads(member)
-
-    if has_member_docstring(bindings, overloads):
-        docstring_ref, has_auto_docstring = member_docstring(sf, spec,
-                bindings, scope, overloads)
-        sf.write('\n')
-
-        if not has_auto_docstring:
-            # Handwritten docstrings cannot be used in exception messages.
-            docstring_ref = 'SIP_NULLPTR'
-    else:
-        docstring_ref = 'SIP_NULLPTR'
-
-    if member.no_arg_parser or member.allow_keyword_args:
-        kw_fw_decl = ', PyObject *'
-        kw_decl = ', PyObject *sipKwds'
-    else:
-        kw_fw_decl = kw_decl = ''
-
-    sip_self_unused = False
-
-    if get_py_scope(scope) is None:
-        callable_ref = get_py_struct_name('func', scope, member.py_name.name)
-
-        if not spec.c_bindings:
-            sf.write(f'extern "C" {{static PyObject *{callable_ref}(PyObject *, PyObject *{kw_fw_decl});}}\n')
-            sip_self = ''
-        else:
-            sip_self = 'sipSelf'
-            sip_self_unused = True;
-
-        sf.write(f'static PyObject *{callable_ref}(PyObject *{sip_self}, PyObject *sipArgs{kw_decl})\n')
-    else:
-        callable_ref = get_py_struct_name('meth', scope, member.py_name.name)
-
-        if not spec.c_bindings:
-            sf.write(f'extern "C" {{static PyObject *{callable_ref}(PyObject *, PyObject *{kw_fw_decl});}}\n')
-
-        sf.write(f'static PyObject *{callable_ref}(PyObject *, PyObject *sipArgs{kw_decl})\n')
-
-    sf.write('{\n')
-
-    need_intro = True
-
-    for overload in member.overloads:
-        if member.no_arg_parser:
-            sf.write_code(overload.method_code)
-            break
-
-        if need_intro:
-            sf.write('    PyObject *sipParseErr = SIP_NULLPTR;\n')
-
-            if sip_self_unused:
-                sf.write(
-'''
-    (void)sipSelf;
-''')
-
-            need_intro = False
-
-        _function_body(sf, spec, bindings, scope, overload)
-
-    if not need_intro:
-        sf.write(
-f'''
-    /* Raise an exception if the arguments couldn't be parsed. */
-    sipNoFunction(sipParseErr, {cached_name_ref(member.py_name)}, {docstring_ref});
-
-    return SIP_NULLPTR;
-''')
-
-    sf.write('}\n')
+    overloads_bindings(sf, spec, bindings, scope, _callable_overloads(member))
 
 
 def _enum_member_table(sf, spec, scope=None):

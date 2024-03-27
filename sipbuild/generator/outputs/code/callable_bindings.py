@@ -19,7 +19,7 @@ from ..formatters import (fmt_argument_as_name, fmt_argument_as_cpp_type,
 from .argument_parser import argument_parser
 from .docstrings import has_member_docstring, member_docstring
 from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
-        is_string, is_used_in_code)
+        is_string, is_used_in_code, type_needs_user_state, user_state_suffix)
 
 
 def overloads_bindings(sf, spec, bindings, scope, overloads, prefix=''):
@@ -641,7 +641,7 @@ def _delete_temporaries(sf, spec, py_signature):
 
                 sf.write(f', {get_gto_name(arg.definition)}, {arg_name}State')
 
-                if _type_needs_user_state(arg):
+                if type_needs_user_state(arg):
                     sf.write(f', {arg_name}UserState')
 
                 sf.write(');\n')
@@ -1483,15 +1483,9 @@ def _handling_exceptions(bindings, throw_args):
     return bindings.exceptions and (throw_args is None or throw_args.arguments is not None)
 
 
-def _type_needs_user_state(type):
-    """ Return True if a type needs user state to be provided. """
-
-    return type.type is ArgumentType.MAPPED and type.definition.needs_user_state
-
-
 def _user_state_suffix(spec, type):
     """ Return the suffix for functions that have a variant that supports a
     user state.
     """
 
-    return 'US' if spec.abi_version >= (13, 0) and _type_needs_user_state(type) else ''
+    return 'US' if spec.abi_version >= (13, 0) and type_needs_user_state(type) else ''

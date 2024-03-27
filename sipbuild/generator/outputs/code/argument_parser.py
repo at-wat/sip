@@ -5,15 +5,16 @@
 
 from ...python_slots import is_multi_arg_slot, is_number_slot
 from ...specification import (AccessSpecifier, ArgumentType, ArrayArgument,
-        IfaceFileType, KwArgs, PySlot, Transfer, WrappedClass)
+        IfaceFileType, KwArgs, MappedType, PySlot, Transfer, WrappedClass)
 
-from ..formatters import fmt_argument_as_name
+from ..formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
+        fmt_value_list_as_cpp_expression)
 
-from .utils import (abi_supports_array, get_gto_name, is_string,
-        scoped_class_name)
+from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
+        is_string, scoped_class_name, type_needs_user_state)
 
 
-def arg_parser(sf, spec, scope, py_signature, ctor=None, overload=None):
+def argument_parser(sf, spec, scope, py_signature, ctor=None, overload=None):
     """ Generate the argument variables for a member
     function/constructor/operator.
     """
@@ -412,6 +413,105 @@ def arg_parser(sf, spec, scope, py_signature, ctor=None, overload=None):
     args = ', '.join(args)
 
     sf.write(f'        if ({parser_function}({args}))\n')
+
+
+def _argument_variable(sf, spec, scope, arg, arg_nr):
+    """ Generate the definition of an argument variable and any supporting
+    variables.
+    """
+
+    scope_iface_file = scope.iface_file if isinstance(scope, (WrappedClass, MappedType)) else None
+    arg_name = fmt_argument_as_name(spec, arg, arg_nr)
+    supporting_default_value = ' = 0' if arg.default_value is not None else ''
+    nr_derefs = len(arg.derefs)
+
+    if arg.is_in and arg.default_value is not None and arg.type in (ArgumentType.CLASS, ArgumentType.MAPPED) and (nr_derefs == 0 or arg.is_reference):
+        arg_cpp_type = fmt_argument_as_cpp_type(spec, arg,
+                scope=scope_iface_file)
+
+        # Generate something to hold the default value as it cannot be assigned
+        # straight away.
+        expression = fmt_value_list_as_cpp_expression(spec, arg.default_value)
+        sf.write(f'        {arg_cpp_type} {arg_name}def = {expression};\n')
+
+    # Adjust the type so we have the type that will really handle it.
+    saved_derefs = arg.derefs
+    saved_type = arg.type
+    saved_is_reference = arg.is_reference
+    saved_is_const = arg.is_const
+
+    if arg.type in (ArgumentType.ASCII_STRING, ArgumentType.LATIN1_STRING, ArgumentType.UTF8_STRING, ArgumentType.SSTRING, ArgumentType.USTRING, ArgumentType.STRING, ArgumentType.WSTRING):
+        if not arg.is_reference:
+            if nr_derefs == 2:
+                arg.derefs = arg.derefs[0:1]
+            elif nr_derefs == 1 and arg.is_out:
+                arg.derefs = []
+
+    elif arg.type in (ArgumentType.CLASS, ArgumentType.MAPPED, ArgumentType.STRUCT, ArgumentType.UNION, ArgumentType.VOID):
+        arg.derefs = [arg.derefs[0] if len(arg.derefs) != 0 else False]
+
+    else:
+        arg.derefs = []
+
+    # Array sizes are always Py_ssize_t.
+    if arg.array is ArrayArgument.ARRAY_SIZE:
+        arg.type = ArgumentType.SSIZE
+
+    arg.is_reference = False
+
+    if len(arg.derefs) == 0:
+        arg.is_const = False
+
+    modified_arg_cpp_type = fmt_argument_as_cpp_type(spec, arg,
+            scope=scope_iface_file)
+
+    sf.write(f'        {modified_arg_cpp_type} {arg_name}')
+
+    # Restore the argument to its original state.
+    arg.derefs = saved_derefs
+    arg.type = saved_type
+    arg.is_reference = saved_is_reference
+    arg.is_const = saved_is_const
+
+    # Generate any default value.
+    if arg.is_in and arg.default_value is not None:
+        sf.write(' = ')
+
+        if arg.type in (ArgumentType.CLASS, ArgumentType.MAPPED) and (nr_derefs == 0 or arg.is_reference):
+            sf.write(f'&{arg_name}def')
+        else:
+            sf.write(fmt_value_list_as_cpp_expression(spec, arg.default_value))
+
+    sf.write(';\n')
+
+    # Some types have supporting variables.
+    if arg.is_in:
+        if arg.get_wrapper:
+            sf.write(f'        PyObject *{arg_name}Wrapper{supporting_default_value};\n')
+        elif arg.key is not None:
+            sf.write(f'        PyObject *{arg_name}Keep{supporting_default_value};\n')
+
+        if arg.type is ArgumentType.CLASS:
+            if arg.array is ArrayArgument.ARRAY and abi_supports_array(spec):
+                if abi_supports_array(spec):
+                    sf.write(f'        int {arg_name}IsTemp = 0;\n')
+            else:
+                if arg.definition.convert_to_type_code is not None and not arg.is_constrained:
+                    sf.write(f'        int {arg_name}State = 0;\n')
+
+                    if type_needs_user_state(arg):
+                        sf.write(f'        void *{arg_name}UserState = SIP_NULLPTR;\n')
+
+        elif arg.type is ArgumentType.MAPPED:
+            if not arg.definition.no_release and not arg.is_constrained:
+                sf.write(f'        int {arg_name}State = 0;\n')
+
+                if type_needs_user_state(arg):
+                    sf.write(f'        void *{arg_name}UserState = SIP_NULLPTR;\n')
+
+        elif arg.type in (ArgumentType.ASCII_STRING, ArgumentType.LATIN1_STRING, ArgumentType.UTF8_STRING):
+            if arg.key is None and nr_derefs == 1:
+                sf.write(f'        PyObject *{arg_name}Keep{supporting_default_value};\n')
 
 
 def _get_subformat_char(arg):

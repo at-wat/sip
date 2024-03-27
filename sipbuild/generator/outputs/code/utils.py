@@ -3,7 +3,7 @@
 # Copyright (c) 2024 Phil Thompson <phil@riverbankcomputing.com>
 
 
-from ...specification import CodeBlock, WrappedEnum
+from ...specification import ArgumentType, CodeBlock, WrappedEnum
 
 from ..formatters import fmt_class_as_scoped_name
 
@@ -76,6 +76,12 @@ def scoped_class_name(spec, klass):
     """
 
     return fmt_class_as_scoped_name(spec, klass, scope=klass.iface_file)
+
+
+def type_needs_user_state(type):
+    """ Return True if a type needs user state to be provided. """
+
+    return type.type is ArgumentType.MAPPED and type.definition.needs_user_state
 
 
 def use_in_code(code, s, spec=None):

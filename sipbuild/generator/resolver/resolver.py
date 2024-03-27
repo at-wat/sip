@@ -953,21 +953,25 @@ def _resolve_variables(spec, mod, error_log):
 def _get_visible_py_members(spec, klass):
     """ Set the list of visible Python member functions for a class. """
 
+    seen = []
+    visible = []
+
     for mro_klass in klass.mro:
-        for member in mro_klass.members:
-            # See if it is already in the list.  This has the desired side
+        for mro_member in mro_klass.members:
+            # Check if we have already seen it.  This has the desired side
             # effect of eliminating any functions that have an implementation
-            # closer to this class in the hierarchy.  This is the only reason
-            # to define private functions.
-            for visible_member in klass.visible_members:
-                if visible_member.py_name is member.py_name:
+            # more distant in the hierarchy.  This is the only reason to define
+            # private functions.
+            for visible_member in seen:
+                if visible_member.py_name is mro_member.py_name:
                     break
             else:
-                klass.visible_members.append(member)
+                # The way protected overloads are currently handled (when
+                # protected-is-not-public) means that they must also be
+                # visible.  This will change when we use 'using'.
+                member_is_visible = False
 
-                for overload in member.overloads:
-                    need_types = False
-
+                for overload in mro_member.overloads:
                     # If the visible overload is abstract then it hasn't had a
                     # concrete implementation so this class must also be
                     # abstract.
@@ -975,12 +979,19 @@ def _get_visible_py_members(spec, klass):
                         klass.is_abstract = True
 
                     if klass.iface_file.module is spec.module and (klass is mro_klass or (overload.access_specifier is AccessSpecifier.PROTECTED and klass.has_shadow)):
-                        need_types = True
-                        member.py_name.used = True
+                        mro_member.py_name.used = True
+                        member_is_visible = True
 
-                    _iface_files_are_used_by_overload(spec,
-                            klass.iface_file.used, overload,
-                            need_types=need_types);
+                        _iface_files_are_used_by_overload(spec,
+                                klass.iface_file.used, overload,
+                                need_types=True);
+
+                if member_is_visible:
+                    klass.visible_members.append(mro_member)
+
+                seen.append(mro_member)
+
+    klass.visible_members = visible
 
 
 def _get_virtuals(spec, klass, error_log):
@@ -1061,8 +1072,13 @@ def _add_virtual_overload(spec, overload, klass, error_log):
         # virtual handler.
         _iface_files_are_used_by_overload(spec, spec.module.used, overload,
                 need_types=True)
+        _iface_files_are_used_by_overload(spec, klass.iface_file.used,
+                overload, need_types=True)
     else:
         virtual_handler = None
+
+        _iface_files_are_used_by_overload(spec, klass.iface_file.used,
+                overload)
 
     # Add it to the class.
     virtual_overload = VirtualOverload(overload, virtual_handler)

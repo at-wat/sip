@@ -2336,36 +2336,29 @@ f'''static PyObject *convertFrom_{name}(void *sipCppV, PyObject *{xfer})
     _type_definition(sf, spec, bindings, klass, extension_data)
 
 
-def _get_visible_members(klass):
-    """ Return a sorted list of relevant members (either lazy or non-lazy) for
-    a class.
-    """
+def _get_method_members(klass):
+    """ Return a sorted list of method members for a class. """
 
     # Only provide an entry point if there is at least one overload that is
-    # defined in this class and is a non-abstract function or slot.  We allow
-    # private (even though we don't actually generate code) because we need to
+    # defined in this class and is a non-abstract method.  We allow private
+    # (even though we don't actually generate code) because we need to
     # intercept the name before it reaches a more public version further up the
-    # class hierarchy.  We add the ctor and any variable handlers as special
-    # entries.
+    # class hierarchy.
 
     members = []
 
-    for visible_member in klass.visible_members:
-        if visible_member.py_slot is not None:
+    for member in klass.members:
+        if member.py_slot is not None:
             continue
 
         need_member = False
 
-        for overload in visible_member.overloads:
-            # Skip protected methods if we don't have the means to handle them.
-            if overload.access_specifier is AccessSpecifier.PROTECTED and not klass.has_shadow:
-                continue
-
+        for overload in member.overloads:
             if not _skip_overload(overload, klass):
                 need_member = True
 
         if need_member:
-            members.append(visible_member)
+            members.append(member)
 
     return _get_sorted_members(members)
 
@@ -2378,7 +2371,7 @@ def _class_method_table(sf, spec, bindings, klass):
     if klass.iface_file.type is IfaceFileType.NAMESPACE:
         members = _get_sorted_members(klass.members)
     else:
-        members = _get_visible_members(klass)
+        members = _get_method_members(klass)
 
     return _py_method_table(sf, spec, bindings, members, klass)
 
@@ -3313,15 +3306,12 @@ def _class_functions(sf, spec, bindings, klass):
         _shadow_code(sf, spec, bindings, klass)
 
     # The member functions.
-    for visible_member in klass.visible_members:
-        if visible_member.py_slot is None:
-            _member_function(sf, spec, bindings, klass, visible_member)
-
-    # The namespace and slot functions.
     for member in klass.members:
         if klass.iface_file.type is IfaceFileType.NAMESPACE:
             _ordinary_function(sf, spec, bindings, member, scope=klass)
-        elif member.py_slot is not None:
+        elif member.py_slot is None:
+            _member_function(sf, spec, bindings, klass, member)
+        else:
             _py_slot(sf, spec, bindings, member, scope=klass)
 
     # The cast function.
@@ -4209,16 +4199,16 @@ def _protected_declarations(sf, spec, klass):
 
     no_intro = True
 
-    for visible_member in klass.visible_members:
-        if visible_member.py_slot is not None:
+    for member in klass.members:
+        if member.py_slot is not None:
             continue
 
-        for overload in visible_member.overloads:
+        for overload in member.overloads:
             if overload.access_specifier is not AccessSpecifier.PROTECTED:
                 continue
 
             # Check we haven't already handled this signature (eg. if we have
-            # specified the same method with different Python names.
+            # specified the same method with different Python names).
             if _is_duplicate_protected(spec, klass, overload):
                 continue
 
@@ -4263,11 +4253,11 @@ def _protected_definitions(sf, spec, klass):
 
     klass_name = klass.iface_file.fq_cpp_name.as_word
 
-    for visible_member in klass.visible_members:
-        if visible_member.py_slot is not None:
+    for member in klass.members:
+        if member.py_slot is not None:
             continue
 
-        for overload in visible_member.overloads:
+        for overload in member.overloads:
             if overload.access_specifier is not AccessSpecifier.PROTECTED:
                 continue
 
@@ -4317,8 +4307,7 @@ def _protected_definitions(sf, spec, klass):
                     overload.cpp_signature)
 
             if not overload.is_abstract:
-                visible_scope_s = scoped_class_name(spec,
-                        visible_member.scope)
+                visible_scope_s = scoped_class_name(spec, member.scope)
 
                 if overload.is_virtual or overload.is_virtual_reimplementation:
                     sf.write(f'(sipSelfWasArg ? {visible_scope_s}::{overload_name}({protected_call_args}) : ')
@@ -4332,11 +4321,11 @@ def _protected_definitions(sf, spec, klass):
 def _is_duplicate_protected(spec, klass, target_overload):
     """ Return True if a protected method is a duplicate. """
 
-    for visible_member in klass.visible_members:
-        if visible_member.py_slot is not None:
+    for member in klass.members:
+        if member.py_slot is not None:
             continue
 
-        for overload in visible_member.overloads:
+        for overload in member.overloads:
             if overload.access_specifier is not AccessSpecifier.PROTECTED:
                 continue
 
@@ -7801,7 +7790,7 @@ def _pyqt_plugin_signals_table(sf, spec, bindings, klass):
                 is_signals = True
 
                 # Delay this until we know it is needed.
-                visible_members = _get_visible_members(klass)
+                method_members = _get_method_members(klass)
 
                 _pyqt_emitters(sf, spec, klass)
 
@@ -7819,9 +7808,9 @@ static const pyqt{pyqt_version}QtSignal signals_{klass.iface_file.fq_cpp_name.as
                 first_overload = False
 
                 # See if there is a non-signal overload.
-                for vm, visible_member in enumerate(visible_members):
-                    if member is visible_member:
-                        member_nr = vm
+                for m_nr, method_member in enumerate(method_members):
+                    if method_member is member:
+                        member_nr = m_nr
                         break
 
             # We enable a hack that supplies any missing optional arguments.

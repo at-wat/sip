@@ -1543,7 +1543,11 @@ class WrappedClass(Extendable):
     # The C++ name of any overload annotated with __len__.
     len_cpp_name: Optional[str] = None
 
-    # The methods.
+    # The methods defined in this class and which normally hide any methods in
+    # super-classes with the name Python name.  The resolver will also add
+    # super-class methods that have protected overloads (if the
+    # protected-is-public hack is not enabled).  Note that will change when we
+    # handle protected overloads using 'using'.
     members: List[Member] = field(default_factory=list)
 
     # The value of /Metatype/ if specified.
@@ -1629,9 +1633,6 @@ class WrappedClass(Extendable):
 
     # The virtual overloaded methods. (resolver)
     virtual_overloads: List[VirtualOverload] = field(default_factory=list)
-
-    # The visible member functions. (resolver)
-    visible_members: List[Member] = field(default_factory=list)
 
     def __hash__(self):
         """ Reimplemented so an Argument object can be used as a dict key. """

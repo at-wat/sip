@@ -111,7 +111,8 @@ def _class(parent, spec, module, klass):
     _variables(parent_klass, spec, module, klass)
 
     for member in klass.members:
-        _function(parent_klass, spec, member, klass)
+        if member.scope is klass:
+            _function(parent_klass, spec, member, klass)
 
 
 def _enums(parent, spec, module, scope=None):

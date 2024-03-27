@@ -202,6 +202,9 @@ def _class(pf, spec, klass, defined, indent=0):
 
         if no_body:
             for member in klass.members:
+                if member.scope is not klass:
+                    continue
+
                 for overload in member.overloads:
                     if overload.access_specifier is AccessSpecifier.PRIVATE:
                         continue
@@ -266,6 +269,9 @@ def _class(pf, spec, klass, defined, indent=0):
     first = True
 
     for member in klass.members:
+        if member.scope is not klass:
+            continue
+
         first = _separate(pf, first=first, indent=indent)
 
         _callable(pf, spec, member, defined,

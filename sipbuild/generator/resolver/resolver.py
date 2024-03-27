@@ -114,12 +114,11 @@ def resolve(spec, modules, bindings):
             if klass.needs_shadow and not klass.is_incomplete and klass.dtor is not AccessSpecifier.PRIVATE and klass.can_create:
                 klass.has_shadow = True
 
-            # Get the list of visible Python member functions.
-            _get_visible_py_members(spec, klass)
-
             # Get the virtual members.
             if klass.needs_shadow:
                 _get_virtuals(spec, klass, error_log)
+
+            _iface_files_are_used_by_class_overloads(spec, klass)
 
         elif klass.iface_file.type is IfaceFileType.NAMESPACE:
             for member in klass.members:
@@ -950,8 +949,8 @@ def _resolve_variables(spec, mod, error_log):
             _resolve_variable_type(spec, variable, error_log)
 
 
-def _get_visible_py_members(spec, klass):
-    """ Set the list of visible Python member functions for a class. """
+def _iface_files_are_used_by_class_overloads(spec, klass):
+    """ Make sure all interface files for a class's overloads are used. """
 
     seen = []
     visible = []
@@ -972,13 +971,12 @@ def _get_visible_py_members(spec, klass):
                 member_is_visible = False
 
                 for overload in mro_member.overloads:
-                    # If the visible overload is abstract then it hasn't had a
-                    # concrete implementation so this class must also be
-                    # abstract.
+                    # If the overload is abstract then it hasn't had a concrete
+                    # implementation so this class must also be abstract.
                     if overload.is_abstract:
                         klass.is_abstract = True
 
-                    if klass.iface_file.module is spec.module and (klass is mro_klass or (overload.access_specifier is AccessSpecifier.PROTECTED and klass.has_shadow)):
+                    if klass.iface_file.module is spec.module and (overload.access_specifier is not AccessSpecifier.PROTECTED or klass.has_shadow):
                         mro_member.py_name.used = True
                         member_is_visible = True
 
@@ -987,11 +985,11 @@ def _get_visible_py_members(spec, klass):
                                 need_types=True);
 
                 if member_is_visible:
-                    klass.visible_members.append(mro_member)
+                    visible.append(mro_member)
 
                 seen.append(mro_member)
 
-    klass.visible_members = visible
+    klass.members = visible
 
 
 def _get_virtuals(spec, klass, error_log):

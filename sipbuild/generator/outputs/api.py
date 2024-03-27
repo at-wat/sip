@@ -45,7 +45,7 @@ def output_api(spec, api_filename):
                         _ctor(af, spec, module, ctor, klass)
 
                 for member in klass.members:
-                    if member.py_slot is None:
+                    if member.scope is klass and member.py_slot is None:
                         for overload in member.overloads:
                             if overload.access_specifier is not AccessSpecifier.PRIVATE:
                                 _overload(af, spec, module, overload, scope=klass)

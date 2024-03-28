@@ -5,12 +5,12 @@
 
 from ...python_slots import (is_hash_return_slot, is_inplace_number_slot,
         is_inplace_sequence_slot, is_int_arg_slot, is_int_return_slot,
-        is_number_slot, is_ssize_return_slot, is_void_return_slot,
-        is_zero_arg_slot)
+        is_multi_arg_slot, is_number_slot, is_rich_compare_slot,
+        is_ssize_return_slot, is_void_return_slot, is_zero_arg_slot)
 from ...scoped_name import STRIP_GLOBAL
 from ...specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, GILAction, IfaceFileType, MappedType, PySlot, Transfer,
-        WrappedClass)
+        WrappedClass, WrappedEnum)
 from ...utils import get_py_scope, get_py_struct_name, py_as_int
 
 from ..formatters import (fmt_argument_as_name, fmt_argument_as_cpp_type,
@@ -22,21 +22,38 @@ from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
         is_string, is_used_in_code, type_needs_user_state)
 
 
-def overloads_bindings(sf, spec, bindings, scope, overloads, prefix=''):
+def method_function(sf, spec, bindings, klass, overloads, prefix=''):
     """ Output the C function that implements the bindings for a list of
-    overloads with the same Python name.  Return a reference to the generated
-    function.
+    class method overloads with the same Python name.  Return a reference to
+    the generated function.
     """
-
-    # ZZZ At the moment 'scope' can be either:
-    #   None for global functions
-    #   MappedType for mapped type functions
-    #   WrappedClass for namespace functions (hidden or otherwise)
-    # Python slots are not (yet?) supported.
 
     # Handle the trivial case.
     if not overloads:
         return None
+
+    if klass.iface_file.type is IfaceFileType.NAMESPACE:
+        return ordinary_function(sf, spec, bindings, klass, overloads,
+                prefix=prefix)
+
+    if overloads[0].common.py_slot is None:
+        return _member_function(sf, spec, bindings, klass, overloads, prefix)
+
+    return _py_slot_function(sf, spec, bindings, overloads, scope=klass,
+            prefix=prefix)
+
+
+def ordinary_function(sf, spec, bindings, scope, overloads, prefix=''):
+    """ Output the C function that implements the bindings for a list of
+    non-method, non-slot overloads with the same Python name.  Return a
+    reference to the generated function.
+    """
+
+    # 'scope' can be either None for global functions, MappedType for mapped
+    # type functions WrappedClass for namespace functions (hidden or
+    # otherwise).
+
+    sf.write('\n\n')
 
     if has_member_docstring(bindings, overloads):
         docstring_ref, has_auto_docstring = member_docstring(sf, spec,
@@ -105,12 +122,361 @@ f'''
 
     sf.write('}\n')
 
+    return callable_ref
+
+
+def _member_function(sf, spec, bindings, klass, overloads, prefix):
+    """ Generate a class member function.  Return a reference to the generated
+    function.
+    """
+
+    # Check that there is at least one overload from this class that needs to
+    # be handled.  See if we can avoid naming the "self" argument (and suppress
+    # a compiler warning).  See if we need to remember if "self" was explicitly
+    # passed as an argument.  See if we need to handle keyword arguments.
+    member = None
+    need_self = need_args = need_selfarg = need_orig_self = False
+
+    # This is the list of overloads for which code is generated.  It excludes
+    # PyQt signals and abstract class functions.  A PyMethodDef may still be
+    # needed even if this list is empty if private class functions have been
+    # defined in order to hide non-private functions in a super-class.
+    callable_overloads = []
+
+    for overload in overloads:
+        if overload.pyqt_is_signal:
+            continue
+
+        # Abstract private class functions don't require a PyMethodDef.
+        # (Non-abstract ones do in order to hide any non-private function in a
+        # super-class.)
+        if overload.access_specifier is AccessSpecifier.PRIVATE:
+            # Abstract private class functions don't need a PyMethodDef.
+            if overload.is_abstract:
+                continue
+        else:
+            callable_overloads.append(overload)
+
+        member = overload.common
+
+        if overload.access_specifier is not AccessSpecifier.PRIVATE:
+            need_args = True
+
+            if spec.abi_version >= (13, 0) or not overload.is_static:
+                need_self = True
+
+                if overload.is_abstract:
+                    need_orig_self = True
+                elif overload.is_virtual or overload.is_virtual_reimplementation or is_used_in_code(overload.method_code, 'sipSelfWasArg'):
+                    need_selfarg = True
+
+    # Handle the trivial case.
+    if member is None:
+        return None
+
+    sf.write('\n\n')
+
+    klass_name = klass.iface_file.fq_cpp_name.as_word
+    member_py_name = member.py_name.name
+
+    # Generate the docstrings.
+    if has_member_docstring(bindings, callable_overloads):
+        docstring_ref, has_auto_docstring = member_docstring(sf, spec,
+                bindings, klass, callable_overloads,
+                # ZZZ is_method is probably always True
+                is_method=not klass.is_hidden_namespace)
+        sf.write('\n')
+
+        if not has_auto_docstring:
+            # Handwritten docstrings cannot be used in exception messages.
+            docstring_ref = 'SIP_NULLPTR'
+    else:
+        docstring_ref = 'SIP_NULLPTR'
+
+    if member.no_arg_parser or member.allow_keyword_args:
+        arg3_type = ', PyObject *'
+        arg3_decl = ', PyObject *sipKwds'
+    else:
+        arg3_type = ''
+        arg3_decl = ''
+
+    sip_self = 'sipSelf' if need_self else ''
+    sip_args = 'sipArgs' if need_args else ''
+
+    callable_ref = get_py_struct_name('meth', klass, member.py_name.name,
+            prefix=prefix)
+
+    if not spec.c_bindings:
+        sf.write(f'extern "C" {{static PyObject *{callable_ref}(PyObject *, PyObject *{arg3_type});}}\n')
+
+    sf.write(f'static PyObject *{callable_ref}(PyObject *{sip_self}, PyObject *{sip_args}{arg3_decl})\n{{\n')
+
+    if bindings.tracing:
+        sf.write(f'    sipTrace(SIP_TRACE_METHODS, "{callable_ref}()\\n");\n\n')
+
+    if not member.no_arg_parser:
+        if need_args:
+            sf.write('    PyObject *sipParseErr = SIP_NULLPTR;\n')
+
+        if need_selfarg:
+            # This determines if we call the explicitly scoped version or the
+            # unscoped version (which will then go via the vtable).
+            #
+            # - If the call was unbound and self was passed as the first
+            #   argument (ie. Foo.meth(self)) then we always want to call the
+            #   explicitly scoped version.
+            #
+            # - If the call was bound then we only call the unscoped version in
+            #   case there is a C++ sub-class reimplementation that Python
+            #   knows nothing about.  Otherwise, if the call was invoked by
+            #   super() within a Python reimplementation then the Python
+            #   reimplementation would be called recursively.
+            #
+            # In addition, if the type is a derived class then we know that
+            # there can't be a C++ sub-class that we don't know about so we can
+            # avoid the vtable.
+            #
+            # Note that we would like to rename 'sipSelfWasArg' to
+            # 'sipExplicitScope' but it is part of the public API.
+            if spec.abi_version >= (13, 0):
+                sipself_test = f'!PyObject_TypeCheck(sipSelf, sipTypeAsPyTypeObject({get_gto_name(klass)}))'
+            else:
+                sipself_test = '!sipSelf'
+
+            sf.write(f'    bool sipSelfWasArg = ({sipself_test} || sipIsDerivedClass((sipSimpleWrapper *)sipSelf));\n')
+
+        if need_orig_self:
+            # This is similar to the above but for abstract methods.  We allow
+            # the (potential) recursion because it means that the concrete
+            # implementation can be put in a mixin and it will all work.
+            sf.write('    PyObject *sipOrigSelf = sipSelf;\n')
+
+    if member.no_arg_parser:
+        sf.write_code(overload.method_code)
+    else:
+        for overload in callable_overloads:
+            if member.no_arg_parser:
+                sf.write_code(overload.method_code)
+                break
+
+            _function_body(sf, spec, bindings, klass, overload,
+                    original_klass=member.scope)
+
+        sip_parse_err = 'sipParseErr' if need_args else 'SIP_NULLPTR'
+        klass_py_name_ref = cached_name_ref(klass.py_name)
+        member_py_name_ref = cached_name_ref(member.py_name)
+
+        sf.write(
+f'''
+    sipNoMethod({sip_parse_err}, {klass_py_name_ref}, {member_py_name_ref}, {docstring_ref});
+
+    return SIP_NULLPTR;
+''')
+
+    sf.write('}\n')
+
+    return callable_ref
+
+
+def _py_slot_function(sf, spec, bindings, overloads, scope=None, prefix=''):
+    """ Generate a Python slot function for either a class, an enum or an
+    extender.  Return a reference to the generated function.
+    """
+
+    if scope is None:
+        py_name = None
+        fq_cpp_name = None
+    elif isinstance(scope, WrappedEnum):
+        py_name = scope.py_name
+        fq_cpp_name = scope.fq_cpp_name
+    else:
+        py_name = scope.py_name
+        fq_cpp_name = scope.iface_file.fq_cpp_name
+
+    member = overloads[0].common
+
+    if is_void_return_slot(member.py_slot) or is_int_return_slot(member.py_slot):
+        ret_type = 'int '
+        ret_value = '-1'
+    elif is_ssize_return_slot(member.py_slot):
+        ret_type = 'Py_ssize_t '
+        ret_value = '0'
+    elif is_hash_return_slot(member.py_slot):
+        if spec.abi_version >= (13, 0):
+            ret_type = 'Py_hash_t '
+            ret_value = '0'
+        else:
+            ret_type = 'long '
+            ret_value = '0L'
+    else:
+        ret_type = 'PyObject *'
+        ret_value = 'SIP_NULLPTR'
+
+    has_args = True
+
+    if is_int_arg_slot(member.py_slot):
+        has_args = False
+        arg_str = 'PyObject *sipSelf, int a0'
+        decl_arg_str = 'PyObject *, int'
+    elif member.py_slot is PySlot.CALL:
+        if spec.c_bindings or member.allow_keyword_args or member.no_arg_parser:
+            arg_str = 'PyObject *sipSelf, PyObject *sipArgs, PyObject *sipKwds'
+        else:
+            arg_str = 'PyObject *sipSelf, PyObject *sipArgs, PyObject *'
+
+        decl_arg_str = 'PyObject *, PyObject *, PyObject *'
+    elif is_multi_arg_slot(member.py_slot):
+        arg_str = 'PyObject *sipSelf, PyObject *sipArgs'
+        decl_arg_str = 'PyObject *, PyObject *'
+    elif is_zero_arg_slot(member.py_slot):
+        has_args = False
+        arg_str = 'PyObject *sipSelf'
+        decl_arg_str = 'PyObject *'
+    elif is_number_slot(member.py_slot):
+        arg_str = 'PyObject *sipArg0, PyObject *sipArg1'
+        decl_arg_str = 'PyObject *, PyObject *'
+    elif member.py_slot is PySlot.SETATTR:
+        arg_str = 'PyObject *sipSelf, PyObject *sipName, PyObject *sipValue'
+        decl_arg_str = 'PyObject *, PyObject *, PyObject *'
+    else:
+        arg_str = 'PyObject *sipSelf, PyObject *sipArg'
+        decl_arg_str = 'PyObject *, PyObject *'
+
+    sf.write('\n\n')
+
+    callable_ref = get_py_struct_name('slot', scope, member.py_name.name,
+            prefix=prefix)
+
+    if not spec.c_bindings:
+        sf.write(f'extern "C" {{static {ret_type}{callable_ref}({decl_arg_str});}}\n')
+
+    sf.write(f'static {ret_type}{callable_ref}({arg_str})\n{{\n')
+
+    if member.py_slot is PySlot.CALL and member.no_arg_parser:
+        for overload in member.overloads:
+            sf.write_code(overload.method_code)
+    else:
+        if is_inplace_number_slot(member.py_slot):
+            sf.write(
+f'''    if (!PyObject_TypeCheck(sipSelf, sipTypeAsPyTypeObject(sipType_{fq_cpp_name.as_word})))
+    {{
+        Py_INCREF(Py_NotImplemented);
+        return Py_NotImplemented;
+    }}
+
+''')
+
+        if not is_number_slot(member.py_slot):
+            as_cpp = fq_cpp_name.as_cpp
+            gto_name = get_gto_name(scope)
+
+            if isinstance(scope, WrappedClass):
+                sf.write(
+f'''    {as_cpp} *sipCpp = reinterpret_cast<{as_cpp} *>(sipGetCppPtr((sipSimpleWrapper *)sipSelf, {gto_name}));
+
+    if (!sipCpp)
+''')
+            else:
+                sf.write(
+f'''    {as_cpp} sipCpp = static_cast<{as_cpp}>(sipConvertToEnum(sipSelf, {gto_name}));
+
+    if (PyErr_Occurred())
+''')
+
+            sf.write(f'        return {ret_value};\n\n')
+
+        if has_args:
+            sf.write('    PyObject *sipParseErr = SIP_NULLPTR;\n')
+
+        for overload in member.overloads:
+            if overload.is_abstract:
+                sf.write('    PyObject *sipOrigSelf = sipSelf;\n')
+                break
+
+        scope_not_enum = not isinstance(scope, WrappedEnum)
+
+        for overload in member.overloads:
+            dereferenced = scope_not_enum and not overload.dont_deref_self
+
+            _function_body(sf, spec, bindings, scope, overload,
+                    dereferenced=dereferenced)
+
+        if has_args:
+            if member.py_slot in (PySlot.CONCAT, PySlot.ICONCAT, PySlot.REPEAT, PySlot.IREPEAT):
+                sf.write(
+f'''
+    /* Raise an exception if the argument couldn't be parsed. */
+    sipBadOperatorArg(sipSelf, sipArg, {_get_slot_name(member.py_slot)});
+
+    return SIP_NULLPTR;
+''')
+
+            else:
+                if is_rich_compare_slot(member.py_slot):
+                    sf.write(
+'''
+    Py_XDECREF(sipParseErr);
+''')
+                elif is_number_slot(member.py_slot) or is_inplace_number_slot(member.py_slot):
+                    sf.write(
+'''
+    Py_XDECREF(sipParseErr);
+
+    if (sipParseErr == Py_None)
+        return SIP_NULLPTR;
+''')
+
+                if is_number_slot(member.py_slot) or is_rich_compare_slot(member.py_slot):
+                    # We can only extend class slots. */
+                    if not isinstance(scope, WrappedClass):
+                        sf.write(
+'''
+    PyErr_Clear();
+
+    Py_INCREF(Py_NotImplemented);
+    return Py_NotImplemented;
+''')
+                    elif is_number_slot(member.py_slot):
+                        sf.write(
+f'''
+    return sipPySlotExtend(&sipModuleAPI_{spec.module.py_name}, {_get_slot_name(member.py_slot)}, SIP_NULLPTR, sipArg0, sipArg1);
+''')
+                    else:
+                        sf.write(
+f'''
+    return sipPySlotExtend(&sipModuleAPI_{spec.module.py_name}, {_get_slot_name(member.py_slot)}, {get_gto_name(scope)}, sipSelf, sipArg);
+''')
+                elif is_inplace_number_slot(member.py_slot):
+                    sf.write(
+'''
+    PyErr_Clear();
+
+    Py_INCREF(Py_NotImplemented);
+    return Py_NotImplemented;
+''')
+                else:
+                    member_name = '(sipValue != SIP_NULLPTR ? sipName___setattr__ : sipName___delattr__)' if member.py_slot is PySlot.SETATTR else cached_name_ref(member.py_name)
+
+                    sf.write(
+f'''
+    sipNoMethod(sipParseErr, {cached_name_ref(py_name)}, {member_name}, SIP_NULLPTR);
+
+    return {ret_value};
+''')
+        else:
+            sf.write(
+'''
+    return 0;
+''')
+
+    sf.write('}\n')
+
+    return callable_ref
+
 
 def _function_body(sf, spec, bindings, scope, overload, original_klass=None,
         dereferenced=True):
     """ Generate the function calls for a particular overload. """
-
-    # ZZZ This has support for slots
 
     if scope is None:
         original_scope = None
@@ -654,6 +1020,19 @@ def _gc_ellipsis(sf, signature):
         sf.write(f'\n            Py_DECREF(a{last});\n')
 
 
+def _get_enum_class_scope(spec, enum):
+    """ Return the scope of an unscoped enum as a string. """
+
+    if enum.is_protected:
+        scope_s = 'sip' + enum.scope.iface_file.fq_cpp_name.as_word
+    elif enum.scope.is_protected:
+        scope_s = scoped_class_name(spec, enum.scope)
+    else:
+        scope_s = enum.scope.iface_file.fq_cpp_name.as_cpp
+
+    return scope_s
+
+
 def _get_convert_to_type_code(type):
     """ Return a type's %ConvertToTypeCode. """
 
@@ -695,6 +1074,16 @@ def _get_named_value_decl(spec, scope, type, name):
     type.is_reference = saved_is_reference
 
     return named_value_decl
+
+
+def _get_slot_arg(spec, overload, arg_nr):
+    """ Return an argument to a slot call. """
+
+    arg = overload.py_signature.args[arg_nr]
+
+    dereference = '*' if arg.type in (ArgumentType.CLASS, ArgumentType.MAPPED) and len(arg.derefs) == 0 else ''
+
+    return dereference + fmt_argument_as_name(spec, arg, arg_nr)
 
 
 def _get_slot_call(spec, scope, overload, dereferenced):
@@ -807,14 +1196,22 @@ def _get_slot_call(spec, scope, overload, dereferenced):
     return ''
 
 
-def _get_slot_arg(spec, overload, arg_nr):
-    """ Return an argument to a slot call. """
+def _get_slot_name(slot_type):
+    """ Return the sip module's string equivalent of a slot. """
 
-    arg = overload.py_signature.args[arg_nr]
+    return slot_type.name.lower() + '_slot'
 
-    dereference = '*' if arg.type in (ArgumentType.CLASS, ArgumentType.MAPPED) and len(arg.derefs) == 0 else ''
 
-    return dereference + fmt_argument_as_name(spec, arg, arg_nr)
+def _get_void_ptr_cast(type):
+    """ Return a void* cast for an argument if needed. """
+
+    # Generate a cast if the argument's type was a typedef.  This allows us to
+    # use typedef's to void* to hide something more complex that we don't
+    # handle.
+    if type.original_typedef is None:
+        return ''
+
+    return '(const void *)' if type.is_const else '(void *)'
 
 
 # A map of operators and their complements.
@@ -903,7 +1300,7 @@ def _cast_zero(spec, arg):
         if enum.is_scoped:
             scope = enum_type
         elif enum.scope is not None:
-            scope = _enum_class_scope(spec, enum)
+            scope = _get_enum_class_scope(spec, enum)
         else:
             scope = ''
 

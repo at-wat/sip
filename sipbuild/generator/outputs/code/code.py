@@ -27,7 +27,7 @@ from ..formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
         fmt_signature_as_type_hint, fmt_value_list_as_cpp_expression)
 
 from .argument_parser import argument_parser
-from .callable_bindings import overloads_bindings
+from .callable_bindings import method_function, ordinary_function
 from .docstrings import has_member_docstring, member_docstring
 from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
         get_normalised_cached_name, is_string, is_used_in_code,
@@ -581,7 +581,7 @@ void sipVEH_{module_name}_{virtual_error_handler.name}(sipSimpleWrapper *{self_n
             # Make sure that there is still an overload and we haven't moved
             # them all to classes.
             if member.overloads:
-                _py_slot(sf, spec, bindings, member)
+                _py_slot_function(sf, spec, bindings, member)
                 slot_extenders = True
 
     # Generate the global functions for any hidden namespaces.
@@ -600,7 +600,7 @@ void sipVEH_{module_name}_{virtual_error_handler.name}(sipSimpleWrapper *{self_n
             init_extenders = True
 
         for member in klass.members:
-            _py_slot(sf, spec, bindings, member, scope=klass)
+            _py_slot_function(sf, spec, bindings, member, scope=klass)
             slot_extenders = True
 
     # Generate any __init__ extender table.
@@ -698,7 +698,7 @@ static sipExternalTypeDef externalTypesTable[] = {
             continue
 
         for member in enum.slots:
-            _py_slot(sf, spec, bindings, member, scope=enum)
+            _py_slot_function(sf, spec, bindings, member, scope=enum)
 
         enum_name = enum.fq_cpp_name.as_word
 
@@ -1576,9 +1576,7 @@ def _encoded_type(module, klass, last=False):
 def _ordinary_function(sf, spec, bindings, member, scope=None):
     """ Generate an ordinary function. """
 
-    sf.write('\n\n')
-
-    overloads_bindings(sf, spec, bindings, scope, _callable_overloads(member))
+    ordinary_function(sf, spec, bindings, scope, member.overloads)
 
 
 def _enum_member_table(sf, spec, scope=None):
@@ -2402,7 +2400,7 @@ def _py_method_table(sf, spec, bindings, members, scope):
             cast_suffix = ''
             flags = ''
 
-        if has_member_docstring(bindings, _callable_overloads(member)):
+        if has_member_docstring(bindings, _callable_class_overloads(member)):
             docstring = f'doc_{scope_name}_{py_name.name}'
         else:
             docstring = 'SIP_NULLPTR'
@@ -3091,8 +3089,8 @@ def _variable_to_cpp(spec, variable, has_state):
     return statement
 
 
-def _py_slot(sf, spec, bindings, member, scope=None):
-    """ Generate a Python slot handler for either a class, an enum or an
+def _py_slot_function(sf, spec, bindings, member, scope=None):
+    """ Generate a Python slot function for either a class, an enum or an
     extender.
     """
 
@@ -3303,12 +3301,7 @@ def _class_functions(sf, spec, bindings, klass):
 
     # The member functions.
     for member in klass.members:
-        if klass.iface_file.type is IfaceFileType.NAMESPACE:
-            _ordinary_function(sf, spec, bindings, member, scope=klass)
-        elif member.py_slot is None:
-            _member_function(sf, spec, bindings, klass, member)
-        else:
-            _py_slot(sf, spec, bindings, member, scope=klass)
+        method_function(sf, spec, bindings, klass, member.overloads)
 
     # The cast function.
     if len(klass.superclasses) != 0:
@@ -6231,140 +6224,6 @@ def _skip_overload(overload, klass):
     return False
 
 
-def _member_function(sf, spec, bindings, klass, member):
-    """ Generate a class member function. """
-
-    # Check that there is at least one overload from this class that needs to
-    # be handled.  See if we can avoid naming the "self" argument (and suppress
-    # a compiler warning).  See if we need to remember if "self" was explicitly
-    # passed as an argument.  See if we need to handle keyword arguments.
-    need_method = need_self = need_args = need_selfarg = need_orig_self = False
-
-    for overload in member.overloads:
-        if _skip_overload(overload, klass):
-            continue
-
-        need_method = True
-
-        if overload.access_specifier is not AccessSpecifier.PRIVATE:
-            need_args = True
-
-            if spec.abi_version >= (13, 0) or not overload.is_static:
-                need_self = True
-
-                if overload.is_abstract:
-                    need_orig_self = True
-                elif overload.is_virtual or overload.is_virtual_reimplementation or is_used_in_code(overload.method_code, 'sipSelfWasArg'):
-                    need_selfarg = True
-
-    # Handle the trivial case.
-    if not need_method:
-        return
-
-    klass_name = klass.iface_file.fq_cpp_name.as_word
-    member_py_name = member.py_name.name
-
-    sf.write('\n\n')
-
-    # Generate the docstrings.
-    overloads = _callable_overloads(member)
-
-    if has_member_docstring(bindings, overloads):
-        docstring_ref, has_auto_docstring = member_docstring(sf, spec,
-                bindings, klass, overloads,
-                is_method=not klass.is_hidden_namespace)
-        sf.write('\n')
-
-        if not has_auto_docstring:
-            # Handwritten docstrings cannot be used in exception messages.
-            docstring_ref = 'SIP_NULLPTR'
-    else:
-        docstring_ref = 'SIP_NULLPTR'
-
-    if member.no_arg_parser or member.allow_keyword_args:
-        arg3_type = ', PyObject *'
-        arg3_decl = ', PyObject *sipKwds'
-    else:
-        arg3_type = ''
-        arg3_decl = ''
-
-    sip_self = 'sipSelf' if need_self else ''
-    sip_args = 'sipArgs' if need_args else ''
-
-    if not spec.c_bindings:
-        sf.write(f'extern "C" {{static PyObject *meth_{klass_name}_{member_py_name}(PyObject *, PyObject *{arg3_type});}}\n')
-
-    sf.write(f'static PyObject *meth_{klass_name}_{member_py_name}(PyObject *{sip_self}, PyObject *{sip_args}{arg3_decl})\n{{\n')
-
-    if bindings.tracing:
-        sf.write(f'    sipTrace(SIP_TRACE_METHODS, "meth_{klass_name}_{member_py_name}()\\n");\n\n')
-
-    if not member.no_arg_parser:
-        if need_args:
-            sf.write('    PyObject *sipParseErr = SIP_NULLPTR;\n')
-
-        if need_selfarg:
-            # This determines if we call the explicitly scoped version or the
-            # unscoped version (which will then go via the vtable).
-            #
-            # - If the call was unbound and self was passed as the first
-            #   argument (ie. Foo.meth(self)) then we always want to call the
-            #   explicitly scoped version.
-            #
-            # - If the call was bound then we only call the unscoped version in
-            #   case there is a C++ sub-class reimplementation that Python
-            #   knows nothing about.  Otherwise, if the call was invoked by
-            #   super() within a Python reimplementation then the Python
-            #   reimplementation would be called recursively.
-            #
-            # In addition, if the type is a derived class then we know that
-            # there can't be a C++ sub-class that we don't know about so we can
-            # avoid the vtable.
-            #
-            # Note that we would like to rename 'sipSelfWasArg' to
-            # 'sipExplicitScope' but it is part of the public API.
-            if spec.abi_version >= (13, 0):
-                sipself_test = f'!PyObject_TypeCheck(sipSelf, sipTypeAsPyTypeObject({get_gto_name(klass)}))'
-            else:
-                sipself_test = '!sipSelf'
-
-            sf.write(f'    bool sipSelfWasArg = ({sipself_test} || sipIsDerivedClass((sipSimpleWrapper *)sipSelf));\n')
-
-        if need_orig_self:
-            # This is similar to the above but for abstract methods.  We allow
-            # the (potential) recursion because it means that the concrete
-            # implementation can be put in a mixin and it will all work.
-            sf.write('    PyObject *sipOrigSelf = sipSelf;\n')
-
-    for overload in member.overloads:
-        if _skip_overload(overload, klass):
-            continue
-
-        if overload.access_specifier is AccessSpecifier.PRIVATE:
-            continue
-
-        if member.no_arg_parser:
-            sf.write_code(overload.method_code)
-            break
-
-        _function_body(sf, spec, bindings, klass, overload,
-                original_klass=member.scope)
-
-    if not member.no_arg_parser:
-        sip_parse_err = 'sipParseErr' if need_args else 'SIP_NULLPTR'
-        klass_py_name_ref = cached_name_ref(klass.py_name)
-        member_py_name_ref = cached_name_ref(member.py_name)
-
-        sf.write(
-f'''
-    sipNoMethod({sip_parse_err}, {klass_py_name_ref}, {member_py_name_ref}, {docstring_ref});
-
-    return SIP_NULLPTR;
-''')
-
-    sf.write('}\n')
-
-
 def _function_body(sf, spec, bindings, scope, overload, original_klass=None,
         dereferenced=True):
     """ Generate the function calls for a particular overload. """
@@ -7875,9 +7734,8 @@ def _global_function_table_entries(sf, spec, bindings, members):
             else:
                 sf.write(f'func_{member.py_name.name}, METH_VARARGS')
 
-            overloads = _callable_overloads(member)
             docstring = _optional_ptr(
-                    has_member_docstring(bindings, overloads),
+                    has_member_docstring(bindings, member.overloads),
                     'doc_' + member.py_name.name)
             sf.write(f', {docstring}}},\n')
 
@@ -8065,7 +7923,7 @@ def _const_cast(spec, type, value):
     return value
 
 
-def _callable_overloads(member):
+def _callable_class_overloads(member):
     """ Return a list of non-private and non-signal overloads. """
 
     overloads = []

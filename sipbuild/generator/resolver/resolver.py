@@ -961,13 +961,10 @@ def _iface_files_are_used_by_class_overloads(spec, klass):
             # effect of eliminating any functions that have an implementation
             # more distant in the hierarchy.  This is the only reason to define
             # private functions.
-            for visible_member in seen:
-                if visible_member.py_name is mro_member.py_name:
-                    break
-            else:
+            if mro_member.py_name not in seen:
                 # The way protected overloads are currently handled (when
                 # protected-is-not-public) means that they must also be
-                # visible.  This will change when we use 'using'.
+                # visible.
                 member_is_visible = False
 
                 for overload in mro_member.overloads:
@@ -976,7 +973,10 @@ def _iface_files_are_used_by_class_overloads(spec, klass):
                     if overload.is_abstract:
                         klass.is_abstract = True
 
-                    if klass.iface_file.module is spec.module and (overload.access_specifier is not AccessSpecifier.PROTECTED or klass.has_shadow):
+                    if klass.iface_file.module is not spec.module:
+                        continue
+
+                    if mro_klass is klass or (overload.access_specifier is AccessSpecifier.PROTECTED and klass.has_shadow):
                         mro_member.py_name.used = True
                         member_is_visible = True
 
@@ -987,7 +987,7 @@ def _iface_files_are_used_by_class_overloads(spec, klass):
                 if member_is_visible:
                     visible.append(mro_member)
 
-                seen.append(mro_member)
+                seen.append(mro_member.py_name)
 
     klass.members = visible
 

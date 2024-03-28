@@ -2351,14 +2351,10 @@ def _get_method_members(klass):
         if member.py_slot is not None:
             continue
 
-        need_member = False
-
         for overload in member.overloads:
             if not _skip_overload(overload, klass):
-                need_member = True
-
-        if need_member:
-            members.append(member)
+                members.append(member)
+                break
 
     return _get_sorted_members(members)
 
@@ -6221,7 +6217,7 @@ f'''            if (sipDeprecated({cached_name_ref(klass.py_name)}, SIP_NULLPTR)
     sf.write('        }\n')
 
 
-def _skip_overload(overload, klass, want_local=True):
+def _skip_overload(overload, klass):
     """ See if an overload should be skipped. """
 
     # Skip if it's a signal.
@@ -6232,11 +6228,6 @@ def _skip_overload(overload, klass, want_local=True):
     if overload.is_abstract and overload.access_specifier is AccessSpecifier.PRIVATE:
         return True
 
-    # If we are disallowing them, skip if it's not in the current class unless
-    # it is protected.
-    if want_local and overload.access_specifier is not AccessSpecifier.PROTECTED and klass is not overload.common.scope:
-        return True
-
     return False
 
 
@@ -6244,31 +6235,27 @@ def _member_function(sf, spec, bindings, klass, member):
     """ Generate a class member function. """
 
     # Check that there is at least one overload from this class that needs to
-    # be handled.  (If all visible overloads are defined in super-classes then
-    # we can leave it to a super-class to handle them.)  See if we can avoid
-    # naming the "self" argument (and suppress a compiler warning).  See if we
-    # need to remember if "self" was explicitly passed as an argument.  See if
-    # we need to handle keyword arguments.
+    # be handled.  See if we can avoid naming the "self" argument (and suppress
+    # a compiler warning).  See if we need to remember if "self" was explicitly
+    # passed as an argument.  See if we need to handle keyword arguments.
     need_method = need_self = need_args = need_selfarg = need_orig_self = False
 
     for overload in member.overloads:
-        # Skip protected methods if we don't have the means to handle them.
-        if overload.access_specifier is AccessSpecifier.PROTECTED and not klass.has_shadow:
+        if _skip_overload(overload, klass):
             continue
 
-        if not _skip_overload(overload, klass):
-            need_method = True
+        need_method = True
 
-            if overload.access_specifier is not AccessSpecifier.PRIVATE:
-                need_args = True
+        if overload.access_specifier is not AccessSpecifier.PRIVATE:
+            need_args = True
 
-                if spec.abi_version >= (13, 0) or not overload.is_static:
-                    need_self = True
+            if spec.abi_version >= (13, 0) or not overload.is_static:
+                need_self = True
 
-                    if overload.is_abstract:
-                        need_orig_self = True
-                    elif overload.is_virtual or overload.is_virtual_reimplementation or is_used_in_code(overload.method_code, 'sipSelfWasArg'):
-                        need_selfarg = True
+                if overload.is_abstract:
+                    need_orig_self = True
+                elif overload.is_virtual or overload.is_virtual_reimplementation or is_used_in_code(overload.method_code, 'sipSelfWasArg'):
+                    need_selfarg = True
 
     # Handle the trivial case.
     if not need_method:
@@ -6350,9 +6337,7 @@ def _member_function(sf, spec, bindings, klass, member):
             sf.write('    PyObject *sipOrigSelf = sipSelf;\n')
 
     for overload in member.overloads:
-        # We must handle all visible overloads, not just those defined in this
-        # class.
-        if _skip_overload(overload, klass, want_local=False):
+        if _skip_overload(overload, klass):
             continue
 
         if overload.access_specifier is AccessSpecifier.PRIVATE:
@@ -7777,6 +7762,9 @@ def _pyqt_plugin_signals_table(sf, spec, bindings, klass):
     is_signals = False
 
     for member in klass.members:
+        if member.scope is not klass:
+            continue
+
         # The signals must be grouped by name.
         first_overload = True
 

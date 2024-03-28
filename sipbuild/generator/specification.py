@@ -1546,8 +1546,7 @@ class WrappedClass(Extendable):
     # The methods defined in this class and which normally hide any methods in
     # super-classes with the name Python name.  The resolver will also add
     # super-class methods that have protected overloads (if the
-    # protected-is-public hack is not enabled).  Note that will change when we
-    # handle protected overloads using 'using'.
+    # protected-is-public hack is not enabled).
     members: List[Member] = field(default_factory=list)
 
     # The value of /Metatype/ if specified.

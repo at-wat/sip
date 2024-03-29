@@ -10,7 +10,7 @@ from .parser import (InvalidAnnotation, validate_boolean, validate_integer,
         validate_string_list, validate_string)
 from .specification import (GILAction, MappedType, Module, Overload,
         WrappedClass)
-from .utils import get_py_struct_name
+from .utils import get_c_ref
 
 
 class BuildSystemExtension:
@@ -89,8 +89,7 @@ class BuildSystemExtension:
         bindings of a function group.
         """
 
-        return get_py_struct_name('meth', scope,
-                function_group[0].common.py_name.name)
+        return get_c_ref('meth', scope, function_group[0].common.py_name.name)
 
     @staticmethod
     def parse_boolean_annotation(name, raw_value, location):

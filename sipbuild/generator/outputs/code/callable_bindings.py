@@ -11,7 +11,7 @@ from ...scoped_name import STRIP_GLOBAL
 from ...specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, GILAction, IfaceFileType, MappedType, PySlot, Transfer,
         WrappedClass, WrappedEnum)
-from ...utils import get_py_scope, get_py_struct_name, py_as_int
+from ...utils import get_py_scope, get_c_ref, py_as_int
 
 from ..formatters import (fmt_argument_as_name, fmt_argument_as_cpp_type,
         fmt_enum_as_cpp_type)
@@ -22,28 +22,26 @@ from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
         is_string, is_used_in_code, type_needs_user_state)
 
 
-def method_function(sf, spec, bindings, klass, overloads, prefix=''):
+def function_bindings(sf, spec, bindings, overloads, scope=None, prefix=''):
     """ Output the C function that implements the bindings for a list of
-    class method overloads with the same Python name.  Return a reference to
-    the generated function.
+    function overloads with the same Python name.  Return a reference to the
+    generated function.
     """
 
     # Handle the trivial case.
     if not overloads:
         return None
 
-    if klass.iface_file.type is IfaceFileType.NAMESPACE:
-        return ordinary_function(sf, spec, bindings, klass, overloads,
-                prefix=prefix)
+    if overloads[0].common.py_slot is not None:
+        return _py_slot_function(sf, spec, bindings, overloads, scope, prefix)
 
-    if overloads[0].common.py_slot is None:
-        return _member_function(sf, spec, bindings, klass, overloads, prefix)
+    if isinstance(scope, WrappedClass) and scope.iface_file.type is IfaceFileType.CLASS:
+        return _member_function(sf, spec, bindings, overloads, scope, prefix)
 
-    return _py_slot_function(sf, spec, bindings, overloads, scope=klass,
-            prefix=prefix)
+    return _ordinary_function(sf, spec, bindings, overloads, scope, prefix)
 
 
-def ordinary_function(sf, spec, bindings, scope, overloads, prefix=''):
+def _ordinary_function(sf, spec, bindings, overloads, scope, prefix):
     """ Output the C function that implements the bindings for a list of
     non-method, non-slot overloads with the same Python name.  Return a
     reference to the generated function.
@@ -78,7 +76,7 @@ def ordinary_function(sf, spec, bindings, scope, overloads, prefix=''):
 
     if get_py_scope(scope) is None:
         # Either no scope or a hidden namespace.
-        callable_ref = get_py_struct_name('func', scope, member.py_name.name,
+        callable_ref = get_c_ref('func', scope, member.py_name.name,
                 prefix=prefix)
 
         if not spec.c_bindings:
@@ -91,7 +89,7 @@ def ordinary_function(sf, spec, bindings, scope, overloads, prefix=''):
         sf.write(f'static PyObject *{callable_ref}(PyObject *{sip_self}, PyObject *sipArgs{kw_decl})\n')
     else:
         # Either a namespace or a mapped type.
-        callable_ref = get_py_struct_name('meth', scope, member.py_name.name,
+        callable_ref = get_c_ref('meth', scope, member.py_name.name,
                 prefix=prefix)
 
         if not spec.c_bindings:
@@ -125,7 +123,7 @@ f'''
     return callable_ref
 
 
-def _member_function(sf, spec, bindings, klass, overloads, prefix):
+def _member_function(sf, spec, bindings, overloads, klass, prefix):
     """ Generate a class member function.  Return a reference to the generated
     function.
     """
@@ -203,8 +201,7 @@ def _member_function(sf, spec, bindings, klass, overloads, prefix):
     sip_self = 'sipSelf' if need_self else ''
     sip_args = 'sipArgs' if need_args else ''
 
-    callable_ref = get_py_struct_name('meth', klass, member.py_name.name,
-            prefix=prefix)
+    callable_ref = get_c_ref('meth', klass, member.py_name.name, prefix=prefix)
 
     if not spec.c_bindings:
         sf.write(f'extern "C" {{static PyObject *{callable_ref}(PyObject *, PyObject *{arg3_type});}}\n')
@@ -278,7 +275,7 @@ f'''
     return callable_ref
 
 
-def _py_slot_function(sf, spec, bindings, overloads, scope=None, prefix=''):
+def _py_slot_function(sf, spec, bindings, overloads, scope, prefix):
     """ Generate a Python slot function for either a class, an enum or an
     extender.  Return a reference to the generated function.
     """
@@ -344,8 +341,7 @@ def _py_slot_function(sf, spec, bindings, overloads, scope=None, prefix=''):
 
     sf.write('\n\n')
 
-    callable_ref = get_py_struct_name('slot', scope, member.py_name.name,
-            prefix=prefix)
+    callable_ref = get_c_ref('slot', scope, member.py_name.name, prefix=prefix)
 
     if not spec.c_bindings:
         sf.write(f'extern "C" {{static {ret_type}{callable_ref}({decl_arg_str});}}\n')

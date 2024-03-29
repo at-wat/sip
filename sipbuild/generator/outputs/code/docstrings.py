@@ -4,7 +4,7 @@
 
 
 from ...specification import DocstringSignature
-from ...utils import get_py_struct_name
+from ...utils import get_c_ref
 
 from ..formatters import fmt_docstring, fmt_docstring_of_overload
 
@@ -41,8 +41,8 @@ def member_docstring(sf, spec, bindings, scope, overloads, is_method=False,
 
     NEWLINE = '\\n"\n"'
 
-    docstring_ref = get_py_struct_name('doc', scope,
-            overloads[0].common.py_name.name, prefix=prefix);
+    docstring_ref = get_c_ref('doc', scope, overloads[0].common.py_name.name,
+            prefix=prefix);
     auto_docstring = True
 
     # See if all the docstrings are automatically generated.

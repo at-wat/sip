@@ -5,7 +5,7 @@
 
 from .scoped_name import ScopedName
 from .specification import (ArgumentType, CachedName, IfaceFile, IfaceFileType,
-        WrappedClass)
+        WrappedClass, WrappedEnum)
 
 
 def append_iface_file(iface_file_list, iface_file):
@@ -236,13 +236,17 @@ def get_py_scope_prefix(py_scope):
     of a C/C++ function or data structure.
     """
 
-    return '' if py_scope is None else py_scope.iface_file.fq_cpp_name.as_word + '_'
+    if py_scope is None:
+        return ''
+
+    fq_cpp_name = py_scope.fq_cpp_name if isinstance(py_scope, WrappedEnum) else py_scope.iface_file.fq_cpp_name
+
+    return fq_cpp_name.as_word + '_'
 
 
-def get_py_struct_name(category, scope, thing, prefix=''):
-    """ Return the name of a generated Python structure for a particular
-    'thing' in a particular category.  For example category may be 'doc' or
-    'meth' and the thing would be the name of a method.
+def get_c_ref(category, scope, thing, prefix=''):
+    """ Return a reference to a generated C 'thing' (typically a structure or a
+    function) in a particular category (for example 'doc' or 'meth').
     """
 
     py_scope_prefix = get_py_scope_prefix(get_py_scope(scope))

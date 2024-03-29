@@ -17,8 +17,7 @@ from ...specification import (AccessSpecifier, Argument, ArgumentType,
         ArrayArgument, CodeBlock, DocstringSignature, GILAction, IfaceFileType,
         KwArgs, MappedType, PySlot, QualifierType, Transfer, ValueType,
         WrappedClass, WrappedEnum)
-from ...utils import (get_py_scope, get_py_struct_name, py_as_int,
-        same_signature)
+from ...utils import get_py_scope, py_as_int, same_signature
 
 from ..formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
         fmt_copying, fmt_docstring, fmt_docstring_of_ctor,
@@ -27,7 +26,7 @@ from ..formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
         fmt_signature_as_type_hint, fmt_value_list_as_cpp_expression)
 
 from .argument_parser import argument_parser
-from .callable_bindings import method_function, ordinary_function
+from .callable_bindings import function_bindings
 from .docstrings import has_member_docstring, member_docstring
 from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
         get_normalised_cached_name, is_string, is_used_in_code,
@@ -575,21 +574,17 @@ void sipVEH_{module_name}_{virtual_error_handler.name}(sipSimpleWrapper *{self_n
     slot_extenders = False
 
     for member in module.global_functions:
-        if member.py_slot is None:
-            _ordinary_function(sf, spec, bindings, member)
-        else:
-            # Make sure that there is still an overload and we haven't moved
-            # them all to classes.
-            if member.overloads:
-                _py_slot_function(sf, spec, bindings, member)
-                slot_extenders = True
+        callable_ref = function_bindings(sf, spec, bindings, member.overloads)
+
+        if member.py_slot is not None and callable_ref is not None:
+            slot_extenders = True
 
     # Generate the global functions for any hidden namespaces.
     for klass in spec.classes:
         if klass.iface_file.module is module and klass.is_hidden_namespace:
             for member in klass.members:
-                if member.py_slot is None:
-                    _ordinary_function(sf, spec, bindings, member, scope=klass)
+                function_bindings(sf, spec, bindings, member.overloads,
+                        scope=klass)
 
     # Generate any class specific __init__ or slot extenders.
     init_extenders = False
@@ -600,7 +595,8 @@ void sipVEH_{module_name}_{virtual_error_handler.name}(sipSimpleWrapper *{self_n
             init_extenders = True
 
         for member in klass.members:
-            _py_slot_function(sf, spec, bindings, member, scope=klass)
+            function_bindings(sf, spec, bindings, member.overloads,
+                    scope=klass)
             slot_extenders = True
 
     # Generate any __init__ extender table.
@@ -698,7 +694,7 @@ static sipExternalTypeDef externalTypesTable[] = {
             continue
 
         for member in enum.slots:
-            _py_slot_function(sf, spec, bindings, member, scope=enum)
+            function_bindings(sf, spec, bindings, member.overloads, scope=enum)
 
         enum_name = enum.fq_cpp_name.as_word
 
@@ -1573,12 +1569,6 @@ def _encoded_type(module, klass, last=False):
     return '{' + ', '.join(fields) + '}'
 
 
-def _ordinary_function(sf, spec, bindings, member, scope=None):
-    """ Generate an ordinary function. """
-
-    ordinary_function(sf, spec, bindings, scope, member.overloads)
-
-
 def _enum_member_table(sf, spec, scope=None):
     """ Generate the table of enum members for a scope.  Return the number of
     them.
@@ -2193,7 +2183,8 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
 
     # Generate the static methods.
     for member in mapped_type.members:
-        _ordinary_function(sf, spec, bindings, member, scope=mapped_type)
+        function_bindings(sf, spec, bindings, member.overloads,
+                scope=mapped_type)
 
     cod_nrmethods = _py_method_table(sf, spec, bindings,
             _get_sorted_members(mapped_type.members), mapped_type)
@@ -3301,7 +3292,7 @@ def _class_functions(sf, spec, bindings, klass):
 
     # The member functions.
     for member in klass.members:
-        method_function(sf, spec, bindings, klass, member.overloads)
+        function_bindings(sf, spec, bindings, member.overloads, scope=klass)
 
     # The cast function.
     if len(klass.superclasses) != 0:

@@ -126,6 +126,9 @@ def resolve(spec, modules, bindings):
                     _iface_files_are_used_by_overload(
                             spec, klass.iface_file.used, overload)
 
+        if klass.iface_file.module is modules[0]:
+            _sort_members(klass.members)
+
     for mod in modules:
         # Create the list of numbered types sorted by type name.
         _create_sorted_numbered_types(spec, mod, error_log)
@@ -137,6 +140,8 @@ def resolve(spec, modules, bindings):
         # Update proxies with some information from the real classes.
         for klass in mod.proxies:
             klass.iface_file.type_nr = klass.real_class.iface_file.type_nr
+
+    _sort_members(modules[0].global_functions)
 
     # Additional class specific checks.
     for klass in spec.classes:
@@ -185,6 +190,12 @@ def resolve(spec, modules, bindings):
 
     # Raise an exception for any errors.
     error_log.as_exception()
+
+
+def _sort_members(members):
+    """ Sort a list of member names. """
+
+    members.sort(key=lambda m: m.py_name.name)
 
 
 def _resolve_module(spec, bindings, mod, error_log, final_checks, seen=None):

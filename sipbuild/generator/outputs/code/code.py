@@ -2182,8 +2182,8 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
         function_bindings(sf, spec, bindings, member.overloads,
                 scope=mapped_type)
 
-    cod_nrmethods = _py_method_table(sf, spec, bindings,
-            _get_sorted_members(mapped_type.members), mapped_type)
+    cod_nrmethods = _py_method_table(sf, spec, bindings, mapped_type.members,
+            mapped_type)
 
     id_int = 'SIP_NULLPTR'
 
@@ -2322,7 +2322,7 @@ f'''static PyObject *convertFrom_{name}(void *sipCppV, PyObject *{xfer})
 
 
 def _get_method_members(klass):
-    """ Return a sorted list of method members for a class. """
+    """ Return a list of method members for a class. """
 
     # Only provide an entry point if there is at least one overload that is
     # defined in this class and is a non-abstract method.  We allow private
@@ -2348,27 +2348,20 @@ def _get_method_members(klass):
             members.append(member)
             break
 
-    return _get_sorted_members(members)
+    return members
 
 
 def _class_method_table(sf, spec, bindings, klass):
-    """ Generate the sorted table of methods for a class and return the number
-    of entries.
+    """ Generate the table of methods for a class and return the number of
+    entries.
     """
 
     if klass.iface_file.type is IfaceFileType.NAMESPACE:
-        members = _get_sorted_members(klass.members)
+        members = klass.members
     else:
         members = _get_method_members(klass)
 
     return _py_method_table(sf, spec, bindings, members, klass)
-
-
-def _get_sorted_members(members):
-    """ Return a sorted list of members. """
-
-    # The entries are sorted by the method name.
-    return sorted(members, key=lambda m: m.py_name.name)
 
 
 def _py_method_table(sf, spec, bindings, members, scope):

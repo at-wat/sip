@@ -5,7 +5,8 @@
 
 from ...specification import ArgumentType, CodeBlock, WrappedEnum
 
-from ..formatters import fmt_class_as_scoped_name
+from ..formatters import (fmt_argument_as_cpp_type, fmt_class_as_scoped_name,
+        fmt_enum_as_cpp_type)
 
 
 def abi_supports_array(spec):
@@ -20,6 +21,56 @@ def cached_name_ref(cached_name, as_nr=False):
     prefix = 'sipNameNr_' if as_nr else 'sipName_'
 
     return prefix + get_normalised_cached_name(cached_name)
+
+
+def cast_zero(spec, arg):
+    """ Return a cast to zero. """
+
+    if arg.type is ArgumentType.ENUM:
+        enum = arg.definition
+        enum_type = fmt_enum_as_cpp_type(enum)
+
+        if len(enum.members) == 0:
+            return f'({enum_type})0'
+
+        if enum.is_scoped:
+            scope = enum_type
+        elif enum.scope is not None:
+            scope = get_enum_class_scope(spec, enum)
+        else:
+            scope = ''
+
+        return scope + '::' + enum.members[0].cpp_name
+
+    if arg.type in (ArgumentType.PYOBJECT, ArgumentType.PYTUPLE, ArgumentType.PYLIST, ArgumentType.PYDICT, ArgumentType.PYCALLABLE, ArgumentType.PYSLICE, ArgumentType.PYTYPE, ArgumentType.PYBUFFER, ArgumentType.PYENUM, ArgumentType.ELLIPSIS):
+        return 'SIP_NULLPTR'
+
+    return '0'
+
+
+def const_cast(spec, type, value):
+    """ Return a value with an appropriate const_cast to a type. """
+
+    if type.is_const:
+        cpp_type = fmt_argument_as_cpp_type(spec, type, plain=True,
+                no_derefs=True)
+
+        return f'const_cast<{cpp_type} *>({value})'
+
+    return value
+
+
+def get_enum_class_scope(spec, enum):
+    """ Return the scope of an unscoped enum as a string. """
+
+    if enum.is_protected:
+        scope_s = 'sip' + enum.scope.iface_file.fq_cpp_name.as_word
+    elif enum.scope.is_protected:
+        scope_s = scoped_class_name(spec, enum.scope)
+    else:
+        scope_s = enum.scope.iface_file.fq_cpp_name.as_cpp
+
+    return scope_s
 
 
 def get_gto_name(wrapped_object):
@@ -40,6 +91,12 @@ def get_normalised_cached_name(cached_name):
 
     # Handle C++ and Python scopes.
     return cached_name.name.replace(':', '_').replace('.', '_')
+
+
+def get_slot_name(slot_type):
+    """ Return the sip module's string equivalent of a slot. """
+
+    return slot_type.name.lower() + '_slot'
 
 
 def is_string(type):
@@ -94,3 +151,11 @@ def use_in_code(code, s, spec=None):
         return s
 
     return s if is_used_in_code(code, s) else ''
+
+
+def user_state_suffix(spec, type):
+    """ Return the suffix for functions that have a variant that supports a
+    user state.
+    """
+
+    return 'US' if spec.abi_version >= (13, 0) and type_needs_user_state(type) else ''

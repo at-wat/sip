@@ -18,8 +18,10 @@ from ..formatters import (fmt_argument_as_name, fmt_argument_as_cpp_type,
 
 from .argument_parser import argument_parser
 from .docstrings import has_member_docstring, member_docstring
-from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
-        is_string, is_used_in_code, scoped_class_name, type_needs_user_state)
+from .utils import (abi_supports_array, cached_name_ref, cast_zero, const_cast,
+        get_enum_class_scope, get_gto_name, get_slot_name, is_string,
+        is_used_in_code, scoped_class_name, type_needs_user_state,
+        user_state_suffix)
 
 
 def ctor_bindings(sf, spec, bindings, overloads, klass, prefix=''):
@@ -87,8 +89,8 @@ f'''static void *{callable_ref}(sipSimpleWrapper *{sip_self}, PyObject *sipArgs,
         sf.write('\n    {\n')
 
         if ctor.method_code is not None:
-            error_flag = _need_error_flag(ctor.method_code)
-            old_error_flag = _need_old_error_flag(ctor.method_code)
+            error_flag = needs_error_flag(ctor.method_code)
+            old_error_flag = needs_old_error_flag(ctor.method_code)
         else:
             error_flag = old_error_flag = False
 
@@ -124,6 +126,82 @@ def function_bindings(sf, spec, bindings, overloads, scope=None, prefix=''):
         return _member_function(sf, spec, bindings, overloads, scope, prefix)
 
     return _ordinary_function(sf, spec, bindings, overloads, scope, prefix)
+
+
+def pyqt_emitters(sf, spec, klass):
+    """ Generate the PyQt emitters for a class. """
+
+    klass_name = klass.iface_file.fq_cpp_name.as_word
+    scope_s = scoped_class_name(spec, klass)
+    klass_name_ref = cached_name_ref(klass.py_name)
+
+    for member in klass.members:
+        in_emitter = False
+
+        for overload in member.overloads:
+            if not (overload.pyqt_is_signal and pyqt_has_optional_args(overload)):
+                continue
+
+            if not in_emitter:
+                in_emitter = True
+
+                sf.write('\n\n')
+
+                if not spec.c_bindings:
+                    sf.write(f'extern "C" {{static int emit_{klass_name}_{overload.cpp_name}(void *, PyObject *);}}\n\n')
+
+                sf.write(
+f'''static int emit_{klass_name}_{overload.cpp_name}(void *sipCppV, PyObject *sipArgs)
+{{
+    PyObject *sipParseErr = SIP_NULLPTR;
+    {scope_s} *sipCpp = reinterpret_cast<{scope_s} *>(sipCppV);
+''')
+
+            # Generate the code that parses the args and emits the appropriate
+            # overloaded signal.
+            sf.write('\n    {\n')
+
+            argument_parser(sf, spec, klass, overload.py_signature)
+
+            sf.write(
+f'''        {{
+            Py_BEGIN_ALLOW_THREADS
+            sipCpp->{overload.cpp_name}(''')
+
+            _call_args(sf, spec, overload.cpp_signature, overload.py_signature)
+
+            sf.write(''');
+            Py_END_ALLOW_THREADS
+
+''')
+
+            _delete_temporaries(sf, spec, overload.py_signature)
+
+            sf.write(
+'''
+            return 0;
+        }
+    }
+''')
+
+        if in_emitter:
+            member_name_ref = cached_name_ref(member.py_name)
+
+            sf.write(
+f'''
+    sipNoMethod(sipParseErr, {klass_name_ref}, {member_name_ref}, SIP_NULLPTR);
+
+    return -1;
+}}
+''')
+
+
+def pyqt_has_optional_args(overload):
+    """ Return True if an overload has optional arguments. """
+
+    args = overload.cpp_signature.args
+
+    return len(args) != 0 and args[-1].default_value is not None
 
 
 def _constructor_call(sf, spec, bindings, klass, ctor, error_flag,
@@ -646,7 +724,7 @@ f'''    {as_cpp} sipCpp = static_cast<{as_cpp}>(sipConvertToEnum(sipSelf, {gto_n
                 sf.write(
 f'''
     /* Raise an exception if the argument couldn't be parsed. */
-    sipBadOperatorArg(sipSelf, sipArg, {_get_slot_name(member.py_slot)});
+    sipBadOperatorArg(sipSelf, sipArg, {get_slot_name(member.py_slot)});
 
     return SIP_NULLPTR;
 ''')
@@ -679,12 +757,12 @@ f'''
                     elif is_number_slot(member.py_slot):
                         sf.write(
 f'''
-    return sipPySlotExtend(&sipModuleAPI_{spec.module.py_name}, {_get_slot_name(member.py_slot)}, SIP_NULLPTR, sipArg0, sipArg1);
+    return sipPySlotExtend(&sipModuleAPI_{spec.module.py_name}, {get_slot_name(member.py_slot)}, SIP_NULLPTR, sipArg0, sipArg1);
 ''')
                     else:
                         sf.write(
 f'''
-    return sipPySlotExtend(&sipModuleAPI_{spec.module.py_name}, {_get_slot_name(member.py_slot)}, {get_gto_name(scope)}, sipSelf, sipArg);
+    return sipPySlotExtend(&sipModuleAPI_{spec.module.py_name}, {get_slot_name(member.py_slot)}, {get_gto_name(scope)}, sipSelf, sipArg);
 ''')
                 elif is_inplace_number_slot(member.py_slot):
                     sf.write(
@@ -787,7 +865,7 @@ def _function_call(sf, spec, bindings, scope, overload, dereferenced,
     saved_result_is_const = result.is_const
 
     # See if we need to make a copy of the result on the heap.
-    is_new_instance = _needs_heap_copy(result, using_copy_ctor=False)
+    is_new_instance = needs_heap_copy(result, using_copy_ctor=False)
 
     if is_new_instance:
         result.is_const = False
@@ -821,7 +899,7 @@ def _function_call(sf, spec, bindings, scope, overload, dereferenced,
 
         # If we are returning a class via an output only reference or pointer
         # then we need an instance on the heap.
-        if arg.type in (ArgumentType.CLASS, ArgumentType.MAPPED) and _need_new_instance(arg):
+        if arg.type in (ArgumentType.CLASS, ArgumentType.MAPPED) and _needs_new_instance(arg):
             arg_name = fmt_argument_as_name(spec, arg, arg_nr)
             arg_cpp_type = fmt_argument_as_cpp_type(spec, arg, plain=True,
                     no_derefs=True)
@@ -840,11 +918,11 @@ def _function_call(sf, spec, bindings, scope, overload, dereferenced,
 
     if overload.method_code is not None:
         # See if the handwritten code seems to be using the error flag.
-        if _need_error_flag(overload.method_code):
+        if needs_error_flag(overload.method_code):
             sf.write('            sipErrorState sipError = sipErrorNone;\n')
             error_flag = True
             separating_newline = True
-        elif _need_old_error_flag(overload.method_code):
+        elif needs_old_error_flag(overload.method_code):
             sf.write('            int sipIsErr = 0;\n')
             old_error_flag = True
             separating_newline = True
@@ -1168,25 +1246,13 @@ def _call_args(sf, spec, cpp_signature, py_signature):
             sf.write(arg_name)
 
 
-def _const_cast(spec, type, value):
-    """ Return a value with an appropriate const_cast to a type. """
-
-    if type.is_const:
-        cpp_type = fmt_argument_as_cpp_type(spec, type, plain=True,
-                no_derefs=True)
-
-        return f'const_cast<{cpp_type} *>({value})'
-
-    return value
-
-
 def _delete_outs(sf, spec, py_signature):
     """ Generate the code to delete any instances created to hold /Out/
     arguments.
     """
 
     for arg_nr, arg in enumerate(py_signature.args):
-        if arg.type in (ArgumentType.CLASS, ArgumentType.MAPPED) and _need_new_instance(arg):
+        if arg.type in (ArgumentType.CLASS, ArgumentType.MAPPED) and _needs_new_instance(arg):
             sf.write(f'                delete {fmt_argument_as_name(spec, arg, arg_nr)};\n')
 
 
@@ -1234,7 +1300,7 @@ def _delete_temporaries(sf, spec, py_signature):
                 if arg.type is ArgumentType.MAPPED and arg.definition.no_release:
                     continue
 
-                sf.write(f'            sipReleaseType{_user_state_suffix(spec, arg)}(')
+                sf.write(f'            sipReleaseType{user_state_suffix(spec, arg)}(')
 
                 if spec.c_bindings or not arg.is_const:
                     sf.write(arg_name)
@@ -1258,19 +1324,6 @@ def _gc_ellipsis(sf, signature):
 
     if last >= 0 and signature.args[last].type is ArgumentType.ELLIPSIS:
         sf.write(f'\n            Py_DECREF(a{last});\n')
-
-
-def _get_enum_class_scope(spec, enum):
-    """ Return the scope of an unscoped enum as a string. """
-
-    if enum.is_protected:
-        scope_s = 'sip' + enum.scope.iface_file.fq_cpp_name.as_word
-    elif enum.scope.is_protected:
-        scope_s = scoped_class_name(spec, enum.scope)
-    else:
-        scope_s = enum.scope.iface_file.fq_cpp_name.as_cpp
-
-    return scope_s
 
 
 def _get_convert_to_type_code(type):
@@ -1436,12 +1489,6 @@ def _get_slot_call(spec, scope, overload, dereferenced):
     return ''
 
 
-def _get_slot_name(slot_type):
-    """ Return the sip module's string equivalent of a slot. """
-
-    return slot_type.name.lower() + '_slot'
-
-
 def _get_void_ptr_cast(type):
     """ Return a void* cast for an argument if needed. """
 
@@ -1522,7 +1569,7 @@ def _get_result_decl(spec, scope, overload, result):
 
     # The typical %MethodCode usually causes a compiler warning, so we
     # initialise the result in that case to try and suppress it.
-    initial_value = ' = ' + _cast_zero(spec, result) if overload.method_code is not None else ''
+    initial_value = ' = ' + cast_zero(spec, result) if overload.method_code is not None else ''
 
     return result_decl + initial_value
 
@@ -1540,7 +1587,7 @@ def _cast_zero(spec, arg):
         if enum.is_scoped:
             scope = enum_type
         elif enum.scope is not None:
-            scope = _get_enum_class_scope(spec, enum)
+            scope = get_enum_class_scope(spec, enum)
         else:
             scope = ''
 
@@ -1599,7 +1646,7 @@ f'''            Py_INCREF(Py_None);
         else:
             result_owner = 'SIP_NULLPTR'
 
-        sip_res = _const_cast(spec, result, 'sipRes')
+        sip_res = const_cast(spec, result, 'sipRes')
 
         if is_new_instance or overload.factory:
             this_action = action if nr_return_values == 1 else 'PyObject *sipResObj ='
@@ -1682,10 +1729,10 @@ f'''            Py_INCREF(Py_None);
         value_name = fmt_argument_as_name(spec, value, only_out_arg_nr)
 
     if value.type in (ArgumentType.CLASS, ArgumentType.MAPPED):
-        need_new_instance = _need_new_instance(value)
+        need_new_instance = _needs_new_instance(value)
 
         convertor = 'sipConvertFromNewType' if need_new_instance else 'sipConvertFromType'
-        value_name = _const_cast(spec, value, value_name)
+        value_name = const_cast(spec, value, value_name)
         transfer = 'Py_None' if not need_new_instance and value.transfer is Transfer.TRANSFER_BACK else 'SIP_NULLPTR'
 
         sf.write(f'            {action} {convertor}({value_name}, {get_gto_name(value.definition)}, {transfer});\n')
@@ -1825,7 +1872,7 @@ def _get_build_result_format(type):
     """
 
     if type.type in (ArgumentType.CLASS, ArgumentType.MAPPED):
-        return 'N' if _need_new_instance(type) else 'D'
+        return 'N' if _needs_new_instance(type) else 'D'
 
     if type.type is ArgumentType.FAKE_VOID:
         return 'D'
@@ -1897,19 +1944,19 @@ def _get_build_result_format(type):
     return ''
 
 
-def _need_error_flag(code):
+def needs_error_flag(code):
     """ Return True if handwritten code uses the error flag. """
 
     return is_used_in_code(code, 'sipError')
 
 
-def _need_old_error_flag(code):
+def needs_old_error_flag(code):
     """ Return True if handwritten code uses the deprecated error flag. """
 
     return is_used_in_code(code, 'sipIsErr')
 
 
-def _needs_heap_copy(arg, using_copy_ctor=True):
+def needs_heap_copy(arg, using_copy_ctor=True):
     """ Return True if an argument (or result) needs to be copied to the heap.
     """
 
@@ -1941,7 +1988,7 @@ def _needs_heap_copy(arg, using_copy_ctor=True):
     return False
 
 
-def _need_new_instance(arg):
+def _needs_new_instance(arg):
     """ Return True if the argument type means an instance needs to be created
     on the heap to pass back to Python.
     """
@@ -2016,10 +2063,10 @@ def _catch(sf, spec, bindings, py_signature, throw_args, release_gil):
         if not use_handler:
             if throw_args is not None:
                 for exception in throw_args.arguments:
-                    _catch_block(sf, spec, exception,
-                            py_signature=py_signature, release_gil=release_gil)
+                    catch_block(sf, spec, exception, py_signature=py_signature,
+                            release_gil=release_gil)
             elif spec.module.default_exception is not None:
-                _catch_block(sf, spec, spec.module.default_exception,
+                catch_block(sf, spec, spec.module.default_exception,
                         py_signature=py_signature, release_gil=release_gil)
 
         sf.write(
@@ -2055,7 +2102,7 @@ def _catch(sf, spec, bindings, py_signature, throw_args, release_gil):
 ''')
 
 
-def _catch_block(sf, spec, exception, py_signature=None, release_gil=False):
+def catch_block(sf, spec, exception, py_signature=None, release_gil=False):
     """ Generate a single catch block. """
 
     exception_fq_cpp_name = exception.iface_file.fq_cpp_name
@@ -2104,23 +2151,9 @@ f'''
 ''')
 
 
-def _throw_specifier(bindings, throw_args):
-    """ Return a throw specifier. """
-
-    return ' noexcept' if bindings.exceptions and throw_args is not None and throw_args.arguments is None else ''
-
-
 def _handling_exceptions(bindings, throw_args):
     """ Return True if exceptions from a callable are being handled. """
 
     # Handle any exceptions if there was no throw specifier, or a non-empty
     # throw specifier.
     return bindings.exceptions and (throw_args is None or throw_args.arguments is not None)
-
-
-def _user_state_suffix(spec, type):
-    """ Return the suffix for functions that have a variant that supports a
-    user state.
-    """
-
-    return 'US' if spec.abi_version >= (13, 0) and type_needs_user_state(type) else ''

@@ -502,9 +502,7 @@ def _member_function(sf, spec, bindings, overloads, klass, prefix):
     # Generate the docstrings.
     if has_member_docstring(bindings, callable_overloads):
         docstring_ref, has_auto_docstring = member_docstring(sf, spec,
-                bindings, klass, callable_overloads,
-                # ZZZ is_method is probably always True
-                is_method=not klass.is_hidden_namespace)
+                bindings, klass, callable_overloads)
         sf.write('\n')
 
         if not has_auto_docstring:

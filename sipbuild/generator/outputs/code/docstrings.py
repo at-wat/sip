@@ -3,7 +3,7 @@
 # Copyright (c) 2024 Phil Thompson <phil@riverbankcomputing.com>
 
 
-from ...specification import DocstringSignature
+from ...specification import DocstringSignature, WrappedClass
 from ...utils import get_c_ref
 
 from ..formatters import fmt_docstring, fmt_docstring_of_overload
@@ -32,14 +32,15 @@ def has_member_docstring(bindings, overloads):
     return auto_docstring
 
 
-def member_docstring(sf, spec, bindings, scope, overloads, is_method=False,
-        prefix=''):
+def member_docstring(sf, spec, bindings, scope, overloads, prefix=''):
     """ Generate the docstring for all overloads of a function/method.  Return
     a 2-tuple of the reference to the generated Python struct and True if the
     docstring was entirely automatically generated.
     """
 
     NEWLINE = '\\n"\n"'
+
+    is_method = isinstance(scope, WrappedClass)
 
     docstring_ref = get_c_ref('doc', scope, overloads[0].common.py_name.name,
             prefix=prefix);

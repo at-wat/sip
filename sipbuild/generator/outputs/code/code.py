@@ -26,7 +26,7 @@ from ..formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
         fmt_signature_as_type_hint, fmt_value_list_as_cpp_expression)
 
 from .argument_parser import argument_parser
-from .callable_bindings import function_bindings
+from .callable_bindings import ctor_bindings, function_bindings
 from .docstrings import has_member_docstring, member_docstring
 from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
         get_normalised_cached_name, is_string, is_used_in_code,
@@ -590,8 +590,7 @@ void sipVEH_{module_name}_{virtual_error_handler.name}(sipSimpleWrapper *{self_n
     init_extenders = False
 
     for klass in module.proxies:
-        if len(klass.ctors) != 0:
-            _type_init(sf, spec, bindings, klass)
+        if ctor_bindings(sf, spec, bindings, klass.ctors, klass) is not None:
             init_extenders = True
 
         for member in klass.members:
@@ -3696,7 +3695,7 @@ f'''    if (sipIsDerivedClass(sipSelf))
 
     # The type initialisation function.
     if klass.can_create:
-        _type_init(sf, spec, bindings, klass)
+        ctor_bindings(sf, spec, bindings, klass.ctors, klass)
 
 
 def _shadow_code(sf, spec, bindings, klass):

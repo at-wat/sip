@@ -19,7 +19,92 @@ from ..formatters import (fmt_argument_as_name, fmt_argument_as_cpp_type,
 from .argument_parser import argument_parser
 from .docstrings import has_member_docstring, member_docstring
 from .utils import (abi_supports_array, cached_name_ref, get_gto_name,
-        is_string, is_used_in_code, type_needs_user_state)
+        is_string, is_used_in_code, scoped_class_name, type_needs_user_state)
+
+
+def ctor_bindings(sf, spec, bindings, overloads, klass, prefix=''):
+    """ Output the C function that implements the bindings for a list of
+    constructor overloads.  Return a reference to the generated function.
+    """
+
+    # Handle the trivial case.
+    if not overloads:
+        return None
+
+    klass_name = klass.iface_file.fq_cpp_name.as_word
+
+    # See if we need to name the self and owner arguments so that we can avoid
+    # a compiler warning about an unused argument.
+    need_self = (spec.c_bindings or klass.has_shadow)
+    need_owner = spec.c_bindings
+
+    for ctor in overloads:
+        if is_used_in_code(ctor.method_code, 'sipSelf'):
+            need_self = True
+
+        if ctor.transfer is Transfer.TRANSFER:
+            need_owner = True
+        else:
+            for arg in ctor.py_signature.args:
+                if not arg.is_in:
+                    continue
+
+                if arg.key is not None:
+                    need_self = True
+
+                if arg.transfer is Transfer.TRANSFER:
+                    need_self = True
+
+                if arg.transfer is Transfer.TRANSFER_THIS:
+                    need_owner = True
+
+    sf.write('\n\n')
+
+    callable_ref = prefix + 'init_type_' + klass_name
+
+    if not spec.c_bindings:
+        sf.write(f'extern "C" {{static void *{callable_ref}(sipSimpleWrapper *, PyObject *, PyObject *, PyObject **, PyObject **, PyObject **);}}\n')
+
+    sip_self = 'sipSelf' if need_self else ''
+    sip_owner = 'sipOwner' if need_owner else ''
+    sip_cpp_type = 'sip' + klass_name if klass.has_shadow else scoped_class_name(spec, klass)
+
+    sf.write(
+f'''static void *{callable_ref}(sipSimpleWrapper *{sip_self}, PyObject *sipArgs, PyObject *sipKwds, PyObject **sipUnused, PyObject **{sip_owner}, PyObject **sipParseErr)
+{{
+    {sip_cpp_type} *sipCpp = SIP_NULLPTR;
+''')
+
+    if bindings.tracing:
+        sf.write(f'\n    sipTrace(SIP_TRACE_INITS, "{callable_ref}()\\n");\n')
+
+    # Generate the code that parses the Python arguments and calls the correct
+    # constructor.
+    for ctor in overloads:
+        if ctor.access_specifier is AccessSpecifier.PRIVATE:
+            continue
+
+        sf.write('\n    {\n')
+
+        if ctor.method_code is not None:
+            error_flag = _need_error_flag(ctor.method_code)
+            old_error_flag = _need_old_error_flag(ctor.method_code)
+        else:
+            error_flag = old_error_flag = False
+
+        argument_parser(sf, spec, klass, ctor.py_signature, ctor=ctor)
+        _constructor_call(sf, spec, bindings, klass, ctor, error_flag,
+                old_error_flag)
+
+        sf.write('    }\n')
+
+    sf.write(
+'''
+    return SIP_NULLPTR;
+}
+''')
+
+    return callable_ref
 
 
 def function_bindings(sf, spec, bindings, overloads, scope=None, prefix=''):
@@ -39,6 +124,165 @@ def function_bindings(sf, spec, bindings, overloads, scope=None, prefix=''):
         return _member_function(sf, spec, bindings, overloads, scope, prefix)
 
     return _ordinary_function(sf, spec, bindings, overloads, scope, prefix)
+
+
+def _constructor_call(sf, spec, bindings, klass, ctor, error_flag,
+        old_error_flag):
+    """ Generate a single constructor call. """
+
+    klass_name = klass.iface_file.fq_cpp_name.as_word
+    scope_s = scoped_class_name(spec, klass)
+
+    sf.write('        {\n')
+
+    if ctor.premethod_code is not None:
+        sf.write('\n')
+        sf.write_code(ctor.premethod_code)
+        sf.write('\n')
+
+    if error_flag:
+        sf.write('            sipErrorState sipError = sipErrorNone;\n\n')
+    elif old_error_flag:
+        sf.write('            int sipIsErr = 0;\n\n')
+
+    if ctor.deprecated:
+        # Note that any temporaries will leak if an exception is raised.
+        sf.write(
+f'''            if (sipDeprecated({cached_name_ref(klass.py_name)}, SIP_NULLPTR) < 0)
+                return SIP_NULLPTR;
+
+''')
+
+    # Call any pre-hook.
+    if ctor.prehook is not None:
+        sf.write(f'            sipCallHook("{ctor.prehook}");\n\n')
+
+    if ctor.method_code is not None:
+        sf.write_code(ctor.method_code)
+    elif spec.c_bindings:
+        sf.write(f'            sipCpp = sipMalloc(sizeof ({scope_s}));\n')
+    else:
+        release_gil = _release_gil(ctor.gil_action, bindings)
+
+        if ctor.raises_py_exception:
+            sf.write('            PyErr_Clear();\n\n')
+
+        if release_gil:
+            sf.write('            Py_BEGIN_ALLOW_THREADS\n')
+
+        _try(sf, bindings, ctor.throw_args)
+
+        klass_type = 'sip' + klass_name if klass.has_shadow else scope_s
+        sf.write(f'            sipCpp = new {klass_type}(')
+
+        if ctor.is_cast:
+            # We have to fiddle the type to generate the correct code.
+            arg0 = ctor.py_signature.args[0]
+            saved_definition = arg0.definition
+            arg0.definition = klass
+            cast_call = fmt_argument_as_cpp_type(spec, arg0)
+            arg0.definition = saved_definition
+
+            sf.write(f'a0->operator {cast_call}()')
+        else:
+            _call_args(sf, spec, ctor.cpp_signature, ctor.py_signature)
+
+        sf.write(');\n')
+
+        _catch(sf, spec, bindings, ctor.py_signature, ctor.throw_args,
+                release_gil)
+
+        if release_gil:
+            sf.write('            Py_END_ALLOW_THREADS\n')
+
+        # This is a bit of a hack to say we want the result transferred.  We
+        # don't simply call sipTransferTo() because the wrapper object hasn't
+        # been fully initialised yet.
+        if ctor.transfer is Transfer.TRANSFER:
+            sf.write('\n            *sipOwner = Py_None;\n')
+
+    # Handle any /KeepReference/ arguments.
+    for arg_nr, arg in enumerate(ctor.py_signature.args):
+        if not arg.is_in:
+            continue
+
+        if arg.key is not None:
+            arg_name = fmt_argument_as_name(spec, arg, arg_nr)
+            suffix = 'Keep' if (arg.type in (ArgumentType.ASCII_STRING, ArgumentType.LATIN1_STRING, ArgumentType.UTF8_STRING) and len(arg.derefs) == 1) or not arg.get_wrapper else 'Wrapper'
+
+            sf.write(f'\n            sipKeepReference((PyObject *)sipSelf, {arg.key}, {arg_name}{suffix});\n')
+
+    _gc_ellipsis(sf, ctor.py_signature)
+    _delete_temporaries(sf, spec, ctor.py_signature)
+
+    sf.write('\n')
+
+    if ctor.raises_py_exception:
+        sf.write(
+'''            if (PyErr_Occurred())
+            {
+                delete sipCpp;
+                return SIP_NULLPTR;
+            }
+
+''')
+
+    if error_flag:
+        sf.write('            if (sipError == sipErrorNone)\n')
+
+        if klass.has_shadow or ctor.posthook is not None:
+            sf.write('            {\n')
+
+        if klass.has_shadow:
+            sf.write('                sipCpp->sipPySelf = sipSelf;\n\n')
+
+        # Call any post-hook.
+        if ctor.posthook is not None:
+            sf.write(f'            sipCallHook("{ctor.posthook}");\n\n')
+
+        sf.write('                return sipCpp;\n')
+
+        if klass.has_shadow or ctor.posthook is not None:
+            sf.write('            }\n')
+
+        sf.write(
+'''
+            if (sipUnused)
+            {
+                Py_XDECREF(*sipUnused);
+            }
+
+            sipAddException(sipError, sipParseErr);
+
+            if (sipError == sipErrorFail)
+                return SIP_NULLPTR;
+''')
+    else:
+        if old_error_flag:
+            sf.write(
+'''            if (sipIsErr)
+            {
+                if (sipUnused)
+                {
+                    Py_XDECREF(*sipUnused);
+                }
+
+                sipAddException(sipErrorFail, sipParseErr);
+                return SIP_NULLPTR;
+            }
+
+''')
+
+        if klass.has_shadow:
+            sf.write('            sipCpp->sipPySelf = sipSelf;\n\n')
+
+        # Call any post-hook.
+        if ctor.posthook is not None:
+            sf.write(f'            sipCallHook("{ctor.posthook}");\n\n')
+
+        sf.write('            return sipCpp;\n')
+
+    sf.write('        }\n')
 
 
 def _ordinary_function(sf, spec, bindings, overloads, scope, prefix):

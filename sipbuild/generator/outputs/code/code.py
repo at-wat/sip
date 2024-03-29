@@ -8,30 +8,24 @@ import os
 from ....exceptions import UserException
 from ....version import SIP_VERSION_STR
 
-from ...python_slots import (is_hash_return_slot, is_inplace_number_slot,
-        is_inplace_sequence_slot, is_int_arg_slot, is_int_return_slot,
-        is_multi_arg_slot, is_number_slot, is_rich_compare_slot,
-        is_ssize_return_slot, is_void_return_slot, is_zero_arg_slot)
-from ...scoped_name import STRIP_GLOBAL, STRIP_NONE
+from ...scoped_name import STRIP_GLOBAL
 from ...specification import (AccessSpecifier, Argument, ArgumentType,
-        ArrayArgument, CodeBlock, DocstringSignature, GILAction, IfaceFileType,
-        KwArgs, MappedType, PySlot, QualifierType, Transfer, ValueType,
-        WrappedClass, WrappedEnum)
-from ...utils import get_py_scope, py_as_int, same_signature
+        ArrayArgument, DocstringSignature, GILAction, IfaceFileType,
+        MappedType, PySlot, QualifierType, WrappedClass, WrappedEnum)
+from ...utils import get_py_scope, same_signature
 
 from ..formatters import (fmt_argument_as_cpp_type, fmt_argument_as_name,
         fmt_copying, fmt_docstring, fmt_docstring_of_ctor,
-        fmt_docstring_of_overload, fmt_enum_as_cpp_type, fmt_scoped_py_name,
-        fmt_signature_as_cpp_declaration, fmt_signature_as_cpp_definition,
-        fmt_signature_as_type_hint, fmt_value_list_as_cpp_expression)
+        fmt_docstring_of_overload, fmt_enum_as_cpp_type,
+        fmt_signature_as_cpp_declaration, fmt_signature_as_cpp_definition)
 
 from .argument_parser import argument_parser
 from .callable_bindings import (catch_block, ctor_bindings, function_bindings,
         needs_error_flag, needs_heap_copy, needs_old_error_flag, pyqt_emitters,
         pyqt_has_optional_args)
-from .docstrings import has_member_docstring, member_docstring
+from .docstrings import has_member_docstring
 from .utils import (abi_supports_array, cached_name_ref, cast_zero, const_cast,
-        get_gto_name, get_normalised_cached_name, get_slot_name, is_string,
+        get_gto_name, get_normalised_cached_name, get_slot_name,
         is_used_in_code, scoped_class_name, type_needs_user_state, use_in_code,
         user_state_suffix)
 

@@ -5,4 +5,3 @@
 
 # Publish the API.  This is private to the rest of sip.
 from .code import output_code
-from .docstrings import member_docstring

@@ -3,7 +3,6 @@
 # Copyright (c) 2024 Phil Thompson <phil@riverbankcomputing.com>
 
 
-from .outputs import member_docstring
 from .outputs.formatters import (fmt_argument_as_cpp_type, fmt_docstring,
         fmt_docstring_of_overload)
 from .parser import (InvalidAnnotation, validate_boolean, validate_integer,
@@ -213,17 +212,6 @@ class BuildSystemExtension:
 
         # XXX
         return ''
-
-    def write_function_group_docstring(self, function_group, scope,
-            output, prefix=''):
-        """ Write the PyDoc_STRVAR() call that implements the docstring of a
-        function group.  Return a 2-tuple of a reference to the generated C
-        object (preceded with an optional prefix) and a flag which is set if
-        the entire docstring was generated automatically.
-        """
-
-        return member_docstring(output, self._spec, self.bindings, scope,
-                function_group, prefix=prefix)
 
     # The rest of the class are the stubs to be re-implemented by sub-classes.
     # There is a naming convention that splits the name into three broad

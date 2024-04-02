@@ -9,30 +9,51 @@ from ...utils import get_c_ref
 from ..formatters import fmt_docstring, fmt_docstring_of_overload
 
 
-def has_member_docstring(bindings, overloads):
+def function_docstring(sf, spec, bindings, overloads, scope, prefix):
+    """ Generate the docstring for all overloads of a function.  Return
+    a 2-tuple of the reference to the generated Python struct to be used in a
+    PyMethodDef and a reference to be used in error messages.
+    """
+
+    errstring_ref = 'SIP_NULLPTR'
+
+    if _has_member_docstring(bindings, overloads):
+        docstring_ref, all_auto_generated = _member_docstring(sf, spec,
+                bindings, overloads, scope, prefix)
+
+        if all_auto_generated:
+            errstring_ref = docstring_ref
+    else:
+        docstring_ref = 'SIP_NULLPTR'
+
+    return docstring_ref, errstring_ref
+
+
+def _has_member_docstring(bindings, overloads):
     """ Return True if a function/method has a docstring. """
 
     if not overloads:
         return False
 
-    auto_docstring = False
+    # If there is no argument parser then there are no automatically generated
+    # docstrings, so there is only a docstring if the overload has an explicit
+    # one.
+    if overloads[0].common.no_arg_parser:
+        return overloads[0].docstring is not None
 
-    # Check for any explicit docstrings and remember if there were any that
-    # could be automatically generated.
+    # See if automatically generated docstring are enabled.
+    if bindings.docstrings:
+        return True
+
+    # Check for an overload with an explicit docstring.
     for overload in overloads:
         if overload.docstring is not None:
             return True
 
-        if bindings.docstrings:
-            auto_docstring = True
-
-    if overloads[0].common.no_arg_parser:
-        return False
-
-    return auto_docstring
+    return False
 
 
-def member_docstring(sf, spec, bindings, scope, overloads, prefix=''):
+def _member_docstring(sf, spec, bindings, overloads, scope, prefix):
     """ Generate the docstring for all overloads of a function/method.  Return
     a 2-tuple of the reference to the generated Python struct and True if the
     docstring was entirely automatically generated.
@@ -88,7 +109,7 @@ def member_docstring(sf, spec, bindings, scope, overloads, prefix=''):
 
         is_first = False
 
-    sf.write('");\n')
+    sf.write('");\n\n')
 
     return docstring_ref, auto_docstring
 

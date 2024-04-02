@@ -17,7 +17,7 @@ from ..formatters import (fmt_argument_as_name, fmt_argument_as_cpp_type,
         fmt_enum_as_cpp_type)
 
 from .argument_parser import argument_parser
-from .docstrings import has_member_docstring, member_docstring
+from .docstrings import function_docstring
 from .utils import (abi_supports_array, cached_name_ref, cast_zero, const_cast,
         get_enum_class_scope, get_gto_name, get_slot_name, is_string,
         is_used_in_code, scoped_class_name, type_needs_user_state,
@@ -111,16 +111,20 @@ f'''static void *{callable_ref}(sipSimpleWrapper *{sip_self}, PyObject *sipArgs,
 
 def function_bindings(sf, spec, bindings, overloads, scope=None, prefix=''):
     """ Output the C function that implements the bindings for a list of
-    function overloads with the same Python name.  Return a reference to the
-    generated function.
+    function overloads with the same Python name.  Return a 2-tuple of a
+    reference to the generated function (or None if there was none) and to the
+    docstring.
     """
 
     # Handle the trivial case.
     if not overloads:
-        return None
+        return None, 'SIP_NULLPTR'
 
     if overloads[0].common.py_slot is not None:
-        return _py_slot_function(sf, spec, bindings, overloads, scope, prefix)
+        callable_ref = _py_slot_function(sf, spec, bindings, overloads, scope,
+                prefix)
+
+        return callable_ref, 'SIP_NULLPTR'
 
     if isinstance(scope, WrappedClass) and scope.iface_file.type is IfaceFileType.CLASS:
         return _member_function(sf, spec, bindings, overloads, scope, prefix)
@@ -365,8 +369,8 @@ f'''            if (sipDeprecated({cached_name_ref(klass.py_name)}, SIP_NULLPTR)
 
 def _ordinary_function(sf, spec, bindings, overloads, scope, prefix):
     """ Output the C function that implements the bindings for a list of
-    non-method, non-slot overloads with the same Python name.  Return a
-    reference to the generated function.
+    non-method, non-slot overloads with the same Python name.  Return a 2-tuple
+    of a reference to the generated function and the docstring.
     """
 
     # 'scope' can be either None for global functions, MappedType for mapped
@@ -375,16 +379,8 @@ def _ordinary_function(sf, spec, bindings, overloads, scope, prefix):
 
     sf.write('\n\n')
 
-    if has_member_docstring(bindings, overloads):
-        docstring_ref, has_auto_docstring = member_docstring(sf, spec,
-                bindings, scope, overloads, prefix=prefix)
-        sf.write('\n')
-
-        if not has_auto_docstring:
-            # Handwritten docstrings cannot be used in exception messages.
-            docstring_ref = 'SIP_NULLPTR'
-    else:
-        docstring_ref = 'SIP_NULLPTR'
+    docstring_ref, errstring_ref = function_docstring(sf, spec, bindings,
+            overloads, scope, prefix)
 
     member = overloads[0].common
 
@@ -435,19 +431,19 @@ def _ordinary_function(sf, spec, bindings, overloads, scope, prefix):
         sf.write(
 f'''
     /* Raise an exception if the arguments couldn't be parsed. */
-    sipNoFunction(sipParseErr, {cached_name_ref(member.py_name)}, {docstring_ref});
+    sipNoFunction(sipParseErr, {cached_name_ref(member.py_name)}, {errstring_ref});
 
     return SIP_NULLPTR;
 ''')
 
     sf.write('}\n')
 
-    return callable_ref
+    return callable_ref, docstring_ref
 
 
 def _member_function(sf, spec, bindings, overloads, klass, prefix):
-    """ Generate a class member function.  Return a reference to the generated
-    function.
+    """ Generate a class member function.  Return a 2-tuple of a reference to
+    the generated function (or None if there was none) and the docstring.
     """
 
     # Check that there is at least one overload from this class that needs to
@@ -492,7 +488,7 @@ def _member_function(sf, spec, bindings, overloads, klass, prefix):
 
     # Handle the trivial case.
     if member is None:
-        return None
+        return None, 'SIP_NULLPTR'
 
     sf.write('\n\n')
 
@@ -500,16 +496,8 @@ def _member_function(sf, spec, bindings, overloads, klass, prefix):
     member_py_name = member.py_name.name
 
     # Generate the docstrings.
-    if has_member_docstring(bindings, callable_overloads):
-        docstring_ref, has_auto_docstring = member_docstring(sf, spec,
-                bindings, klass, callable_overloads)
-        sf.write('\n')
-
-        if not has_auto_docstring:
-            # Handwritten docstrings cannot be used in exception messages.
-            docstring_ref = 'SIP_NULLPTR'
-    else:
-        docstring_ref = 'SIP_NULLPTR'
+    docstring_ref, errstring_ref = function_docstring(sf, spec, bindings,
+            callable_overloads, klass, prefix)
 
     if member.no_arg_parser or member.allow_keyword_args:
         arg3_type = ', PyObject *'
@@ -585,14 +573,14 @@ def _member_function(sf, spec, bindings, overloads, klass, prefix):
 
         sf.write(
 f'''
-    sipNoMethod({sip_parse_err}, {klass_py_name_ref}, {member_py_name_ref}, {docstring_ref});
+    sipNoMethod({sip_parse_err}, {klass_py_name_ref}, {member_py_name_ref}, {errstring_ref});
 
     return SIP_NULLPTR;
 ''')
 
     sf.write('}\n')
 
-    return callable_ref
+    return callable_ref, docstring_ref
 
 
 def _py_slot_function(sf, spec, bindings, overloads, scope, prefix):

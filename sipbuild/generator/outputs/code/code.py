@@ -23,7 +23,6 @@ from .argument_parser import argument_parser
 from .callable_bindings import (catch_block, ctor_bindings, function_bindings,
         needs_error_flag, needs_heap_copy, needs_old_error_flag, pyqt_emitters,
         pyqt_has_optional_args)
-from .docstrings import has_member_docstring
 from .utils import (abi_supports_array, cached_name_ref, cast_zero, const_cast,
         get_gto_name, get_normalised_cached_name, get_slot_name,
         is_used_in_code, scoped_class_name, type_needs_user_state, use_in_code,
@@ -568,20 +567,30 @@ void sipVEH_{module_name}_{virtual_error_handler.name}(sipSimpleWrapper *{self_n
             sf.write('}\n')
 
     # Generate the global functions.
-    slot_extenders = False
+    global_functions_detail = []
+    slot_extenders_detail = []
 
     for member in module.global_functions:
-        callable_ref = function_bindings(sf, spec, bindings, member.overloads)
+        callable_ref, docstring_ref = function_bindings(sf, spec, bindings,
+                member.overloads)
 
-        if member.py_slot is not None and callable_ref is not None:
-            slot_extenders = True
+        if callable_ref is not None:
+            if member.py_slot is None:
+                global_functions_detail.append(
+                        (member, callable_ref, docstring_ref))
+            else:
+                slot_extenders_detail.append((member, callable_ref, None))
 
     # Generate the global functions for any hidden namespaces.
     for klass in spec.classes:
         if klass.iface_file.module is module and klass.is_hidden_namespace:
             for member in klass.members:
-                function_bindings(sf, spec, bindings, member.overloads,
-                        scope=klass)
+                callable_ref, docstring_ref = function_bindings(sf, spec,
+                        bindings, member.overloads, scope=klass)
+
+                if callable_ref is not None:
+                    global_functions_detail.append(
+                            (member, callable_ref, docstring_ref))
 
     # Generate any class specific __init__ or slot extenders.
     init_extenders = False
@@ -591,9 +600,11 @@ void sipVEH_{module_name}_{virtual_error_handler.name}(sipSimpleWrapper *{self_n
             init_extenders = True
 
         for member in klass.members:
-            function_bindings(sf, spec, bindings, member.overloads,
-                    scope=klass)
-            slot_extenders = True
+            callable_ref, _ = function_bindings(sf, spec, bindings,
+                    member.overloads, scope=klass)
+
+            if callable_ref is not None:
+                slot_extenders_detail.append((member, callable_ref, klass))
 
     # Generate any __init__ extender table.
     if init_extenders:
@@ -617,32 +628,27 @@ f'''    {{{first_field}SIP_NULLPTR, {{0, 0, 0}}, SIP_NULLPTR}}
 ''')
 
     # Generate any slot extender table.
-    if slot_extenders:
-        sf.write(
-'''
-static sipPySlotExtenderDef slotExtenders[] = {\n''')
+    if slot_extenders_detail:
+        slot_extender_table = 'slotExtenders'
 
-        for member in module.global_functions:
-            if member.py_slot is not None and member.overloads:
-                member_name = member.py_name
-                slot_name = get_slot_name(member.py_slot)
+        sf.write(f'\nstatic sipPySlotExtenderDef {slot_extender_table}[] = {{\n')
 
-                sf.write(
-f'    {{(void *)slot_{member_name}, {slot_name}, {{0, 0, 0}}}},\n')
+        for member, callable_ref, proxy in slot_extenders_detail:
+            slot_name = get_slot_name(member.py_slot)
 
-        for klass in module.proxies:
-            for member in klass.members:
-                klass_name = klass.iface_file.fq_cpp_name.as_word
-                member_name = member.py_name
-                slot_name = get_slot_name(member.py_slot)
-                encoded_type = _encoded_type(module, klass)
+            if proxy is None:
+                encoded_type = '{0, 0, 0}'
+            else:
+                encoded_type = _encoded_type(module, proxy)
 
-                sf.write(f'    {{(void *)slot_{klass_name}_{member_name}, {slot_name}, {encoded_type}}},\n')
+            sf.write(f'    {{(void *){callable_ref}, {slot_name}, {encoded_type}}},\n')
 
         sf.write(
 '''    {SIP_NULLPTR, (sipPySlotType)0, {0, 0, 0}}
 };
 ''')
+    else:
+        slot_extender_table = 'SIP_NULLPTR'
 
     # Generate the global access functions.
     _access_functions(sf, spec)
@@ -686,27 +692,28 @@ static sipExternalTypeDef externalTypesTable[] = {
         if enum.module is not module or enum.fq_cpp_name is None:
             continue
 
-        if len(enum.slots) == 0:
-            continue
+        members_detail = []
 
         for member in enum.slots:
-            function_bindings(sf, spec, bindings, member.overloads, scope=enum)
+            callable_name, _ = function_bindings(sf, spec, bindings, member.overloads, scope=enum)
 
-        enum_name = enum.fq_cpp_name.as_word
+            if callable_name is not None:
+                members_detail.append((member, callable_name))
 
-        sf.write(
+        if members_detail:
+            enum_name = enum.fq_cpp_name.as_word
+
+            sf.write(
 f'''
 static sipPySlotDef slots_{enum_name}[] = {{
 ''')
 
-        for member in enum.slots:
-            if member.py_slot is not None:
-                member_name = member.py_name
-                slot_name = get_slot_name(member.py_slot)
+            for member, callable_ref in members_detail:
+                    slot_name = get_slot_name(member.py_slot)
 
-                sf.write(f'    {{(void *)slot_{enum_name}_{member_name}, {slot_name}}},\n')
+                    sf.write(f'    {{(void *){callable_ref}, {slot_name}}},\n')
 
-        sf.write(
+            sf.write(
 '''    {SIP_NULLPTR, (sipPySlotType)0}
 };
 
@@ -1079,7 +1086,6 @@ f'''    {nr_enum_members},
             '&module_license')
     exported_exceptions = _optional_ptr(module.nr_exceptions > 0,
             'sipExportedExceptions_' + module_name)
-    slot_extender_table = _optional_ptr(slot_extenders, 'slotExtenders')
     init_extender_table = _optional_ptr(init_extenders, 'initExtenders')
     delayed_dtors = _optional_ptr(module.has_delayed_dtors, 'sipDelayedDtors')
 
@@ -1138,12 +1144,7 @@ sip_qt_metacast_func sip_{module_name}_qt_metacast;
     # Generate the global functions.
     sf.write('    static PyMethodDef sip_methods[] = {\n')
 
-    _global_function_table_entries(sf, spec, bindings, module.global_functions)
-
-    # Generate the global functions for any hidden namespaces.
-    for klass in spec.classes:
-        if klass.iface_file.module is module and klass.is_hidden_namespace:
-            _global_function_table_entries(sf, spec, bindings, klass.members)
+    _pymethoddef_table_entries(sf, global_functions_detail, indent='    ')
 
     sf.write(
 '''        {SIP_NULLPTR, SIP_NULLPTR, 0, SIP_NULLPTR}
@@ -2178,12 +2179,19 @@ f'''static PyObject *convertFrom_{mapped_type_name}(void *sipCppV, PyObject *{xf
         sf.write('}\n')
 
     # Generate the static methods.
-    for member in mapped_type.members:
-        function_bindings(sf, spec, bindings, member.overloads,
-                scope=mapped_type)
+    members_detail = []
 
-    cod_nrmethods = _py_method_table(sf, spec, bindings, mapped_type.members,
-            mapped_type)
+    for member in mapped_type.members:
+        callable_ref, docstring_ref = function_bindings(sf, spec, bindings,
+                member.overloads, scope=mapped_type)
+
+        if callable_ref is not None:
+            members_detail.append((member, callable_ref, docstring_ref))
+
+    cod_nrmethods = len(members_detail)
+
+    if members_detail:
+        _pymethoddef_table(sf, members_detail, mapped_type)
 
     id_int = 'SIP_NULLPTR'
 
@@ -2290,7 +2298,7 @@ def _class_cpp(sf, spec, bindings, klass, extension_data):
     """ Generate the C++ code for a class. """
 
     sf.write_code(klass.type_code)
-    _class_functions(sf, spec, bindings, klass)
+    members_detail, slots_detail = _class_functions(sf, spec, bindings, klass)
     _access_functions(sf, spec, scope=klass)
 
     if klass.iface_file.type is not IfaceFileType.NAMESPACE:
@@ -2318,7 +2326,8 @@ f'''static PyObject *convertFrom_{name}(void *sipCppV, PyObject *{xfer})
 
             sf.write('}\n')
 
-    _type_definition(sf, spec, bindings, klass, extension_data)
+    _type_definition(sf, spec, bindings, klass, members_detail, slots_detail,
+            extension_data)
 
 
 def _get_method_members(klass):
@@ -2351,62 +2360,34 @@ def _get_method_members(klass):
     return members
 
 
-def _class_method_table(sf, spec, bindings, klass):
-    """ Generate the table of methods for a class and return the number of
-    entries.
-    """
-
-    if klass.iface_file.type is IfaceFileType.NAMESPACE:
-        members = klass.members
-    else:
-        members = _get_method_members(klass)
-
-    return _py_method_table(sf, spec, bindings, members, klass)
-
-
-def _py_method_table(sf, spec, bindings, members, scope):
-    """ Generate a Python method table for a class or mapped type and return
-    the number of entries.
-    """
+def _pymethoddef_table(sf, members_detail, scope):
+    """ Generate a Python method table for a class or mapped type. """
 
     scope_name = scope.iface_file.fq_cpp_name.as_word
 
-    no_intro = True
-
-    for member in members:
-        py_name = member.py_name
-        cached_py_name = cached_name_ref(py_name)
-        comma = '' if member is members[-1] else ','
-
-        if member.no_arg_parser or member.allow_keyword_args:
-            cast = 'SIP_MLMETH_CAST('
-            cast_suffix = ')'
-            flags = '|METH_KEYWORDS'
-        else:
-            cast = ''
-            cast_suffix = ''
-            flags = ''
-
-        if has_member_docstring(bindings, _callable_class_overloads(member)):
-            docstring = f'doc_{scope_name}_{py_name.name}'
-        else:
-            docstring = 'SIP_NULLPTR'
-
-        if no_intro:
-            sf.write(
+    sf.write(
 f'''
 
 static PyMethodDef methods_{scope_name}[] = {{
 ''')
 
-            no_intro = False
+    _pymethoddef_table_entries(sf, members_detail)
 
-        sf.write(f'    {{{cached_py_name}, {cast}meth_{scope_name}_{py_name.name}{cast_suffix}, METH_VARARGS{flags}, {docstring}}}{comma}\n')
+    sf.write('};\n')
 
-    if not no_intro:
-        sf.write('};\n')
 
-    return len(members)
+def _pymethoddef_table_entries(sf, members_detail, indent=''):
+    """ Generate the entries in a table of PyMethodDef. """
+
+    for member, callable_ref, docstring_ref in members_detail:
+        sf.write(f'{indent}    {{{cached_name_ref(member.py_name)}, ')
+
+        if member.no_arg_parser or member.allow_keyword_args:
+            sf.write(f'SIP_MLMETH_CAST({callable_ref}), METH_VARARGS|METH_KEYWORDS')
+        else:
+            sf.write(f'{callable_ref}, METH_VARARGS')
+
+        sf.write(f', {docstring_ref}}},\n')
 
 
 def _callable_class_overloads(member):
@@ -3090,7 +3071,9 @@ def _variable_to_cpp(spec, variable, has_state):
 
 
 def _class_functions(sf, spec, bindings, klass):
-    """ Generate the member functions for a class. """
+    """ Generate the member functions for a class and return a 2-tuple of the
+    members details and slots details.
+    """
 
     as_word = klass.iface_file.fq_cpp_name.as_word
     scope_s = scoped_class_name(spec, klass)
@@ -3103,8 +3086,18 @@ def _class_functions(sf, spec, bindings, klass):
         _shadow_code(sf, spec, bindings, klass)
 
     # The member functions.
+    members_detail = []
+    slots_detail = []
+
     for member in klass.members:
-        function_bindings(sf, spec, bindings, member.overloads, scope=klass)
+        callable_ref, docstring_ref = function_bindings(sf, spec, bindings,
+                member.overloads, scope=klass)
+
+        if callable_ref is not None:
+            if member.py_slot is None:
+                members_detail.append((member, callable_ref, docstring_ref))
+            else:
+                slots_detail.append((member, callable_ref))
 
     # The cast function.
     if len(klass.superclasses) != 0:
@@ -3509,6 +3502,8 @@ f'''    if (sipIsDerivedClass(sipSelf))
     # The type initialisation function.
     if klass.can_create:
         ctor_bindings(sf, spec, bindings, klass.ctors, klass)
+
+    return members_detail, slots_detail
 
 
 def _shadow_code(sf, spec, bindings, klass):
@@ -5033,7 +5028,8 @@ def _get_named_value_decl(spec, scope, type, name):
     return named_value_decl
 
 
-def _type_definition(sf, spec, bindings, klass, extension_data):
+def _type_definition(sf, spec, bindings, klass, members_detail, slots_detail,
+        extension_data):
     """ Generate the type structure that contains all the information needed by
     the meta-type.  A sub-set of this is used to extend namespaces.
     """
@@ -5059,31 +5055,26 @@ static sipEncodedTypeDef supers_{klass_name}[] = {{{encoded_types}}};
 ''')
 
     # The slots table.
-    is_slots = False
-
-    for member in klass.members:
-        if member.py_slot is None:
-            continue
-
-        if not is_slots:
-            sf.write(
+    if slots_detail:
+        sf.write(
 f'''
 
 /* Define this type's Python slots. */
 static sipPySlotDef slots_{klass_name}[] = {{
 ''')
 
-            is_slots = True
+        for member, callable_ref in slots_detail:
+            slot_name = get_slot_name(member.py_slot)
 
-        slot_name = get_slot_name(member.py_slot)
-        member_name = member.py_name
-        sf.write(f'    {{(void *)slot_{klass_name}_{member_name}, {slot_name}}},\n')
+            sf.write(f'    {{(void *){callable_ref}, {slot_name}}},\n')
 
-    if is_slots:
         sf.write('    {0, (sipPySlotType)0}\n};\n')
 
     # The attributes tables.
-    nr_methods = _class_method_table(sf, spec, bindings, klass)
+    nr_methods = len(members_detail)
+
+    if members_detail:
+        _pymethoddef_table(sf, members_detail, klass)
 
     if spec.abi_version >= (13, 0):
         nr_enum_members = -1
@@ -5299,7 +5290,7 @@ static sipPySlotDef slots_{klass_name}[] = {{
     class_fields.append(
             _class_object_ref((len(klass.superclasses) != 0), 'supers',
                     klass_name))
-    class_fields.append(_class_object_ref(is_slots, 'slots', klass_name))
+    class_fields.append(_class_object_ref(slots_detail, 'slots', klass_name))
     class_fields.append(
                 _class_object_ref(klass.can_create, 'init_type', klass_name))
     class_fields.append(
@@ -5897,26 +5888,6 @@ def _pyqt_class_plugin(sf, spec, bindings, klass):
     sf.write('};\n')
 
     return True
-
-
-def _global_function_table_entries(sf, spec, bindings, members):
-    """ Generate the entries in a table of PyMethodDef for global functions.
-    """
-
-    for member in members:
-        if member.py_slot is None:
-            py_name = get_normalised_cached_name(member.py_name)
-            sf.write(f'        {{sipName_{py_name}, ')
-
-            if member.no_arg_parser or member.allow_keyword_args:
-                sf.write(f'SIP_MLMETH_CAST(func_{member.py_name.name}), METH_VARARGS|METH_KEYWORDS')
-            else:
-                sf.write(f'func_{member.py_name.name}, METH_VARARGS')
-
-            docstring = _optional_ptr(
-                    has_member_docstring(bindings, member.overloads),
-                    'doc_' + member.py_name.name)
-            sf.write(f', {docstring}}},\n')
 
 
 def _enum_class_scope(spec, enum):
